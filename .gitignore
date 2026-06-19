@@ -1,0 +1,12 @@
+# build output
+main.js
+*.js.map
+
+# deps
+node_modules/
+
+# direnv
+.direnv/
+
+# os
+.DS_Store
