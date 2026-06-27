@@ -40,13 +40,24 @@ Maki is **ports and adapters (hexagonal) around a pure core**, with one hard rul
 **dependencies point inward**. Three layers:
 
 - **Core** (`src/core/`, planned) — pure, framework-free, unit-tested. Holds *all real
-  logic*. Never imports `obsidian`, `pdfjs`, foliate-js, or touches the DOM. Key pieces:
+  logic*, as a **flat** set of files (only `locator/` starts as a directory). Never
+  imports `obsidian`, `pdfjs`, foliate-js, or touches the DOM. Key pieces:
   `AnnotationService` (create an annotation), `HighlightReconciler` (render notes as
   highlights — identical for both backends), `PdfLocatorCodec`/`EpubLocatorCodec`,
   `TemplateEngine`, `ColorModel`, `PdfGeometry` (pure rect math), `ViewerRegistry`.
-- **Ports** (`src/ports/`, planned) — interface-only seams: `DocumentViewer`,
-  `ViewerProvider`, `LocatorCodec`, `BacklinkIndex`, `NoteWriter`. The core is written
-  entirely against these.
+  Shared vocabulary that no single module owns (`Locator`, `Highlight`, `Color`,
+  `DocumentRef`, …) lives in `src/core/types.ts` — limited to that shared vocabulary, not
+  a catch-all; module-owned types co-locate with their owner. Files are placed by *owner*,
+  not by "it's a type / a port" (design §13).
+- **Ports** (`src/core/document-viewer.ts`, `src/core/viewer-provider.ts`, planned) —
+  **only two** interface-only seams, one file each. These are the genuinely-polymorphic
+  boundaries (PDF / EPUB / future native-EPUB). There is no `src/ports/` directory and no
+  pooled `ports.ts` — placement is by *owner*, not by "it's a port" (see design §13).
+- **Injected concretes, *not* ports** — `LocatorCodec` is a structural dispatch type
+  (`Record<BackendId, …>`), not an interface; `ObsidianBacklinkIndex` and
+  `ObsidianNoteWriter` are concrete classes injected into the core. They have exactly one
+  implementation forever, so they earn no port. The core stays testable because it is
+  *injected* (structural fakes), not because these are interfaces. See design §3.6 / §10.
 - **Adapters / integration** (`src/backends/`, `src/obsidian/`, planned) — *humble*:
   thin, logic-free bindings to Obsidian, PDF.js, foliate-js, the DOM, the filesystem.
 
@@ -81,7 +92,8 @@ These are easy to violate and expensive to get wrong:
   is **never modified**. (Embedding annotations into a PDF file is an opt-in secondary
   mode, FR-10, isolated behind `PdfFileIO`.)
 - **Logic goes in the pure core, never in adapters.** If a piece contains a decision, it
-  belongs in `core/` and must be unit-tested with fake ports — no framework mocks. If a
+  belongs in `core/` and must be unit-tested with injected structural fakes — no
+  framework mocks. If a
   piece touches a framework, it belongs in an adapter and must be trivial (no logic).
   The "testability map" in design §10 is the authority on which side each concern lives.
 - **EPUB security:** EPUB sections are arbitrary HTML/JS rendered in iframes and MUST be

@@ -40,42 +40,51 @@ flowchart TB
     geom["PdfGeometry (math)"]
   end
 
-  subgraph PORTS["Ports — interfaces"]
+  subgraph PORTS["Ports — the two real seams"]
     dv[["DocumentViewer"]]
     vp[["ViewerProvider"]]
-    bi[["BacklinkIndex"]]
-    nw[["NoteWriter"]]
   end
 
   subgraph ADP["Adapters — humble"]
     pdf["PdfViewerAdapter<br/>(native PDF.js)"]
     epub["EpubViewerAdapter<br/>(foliate-js)"]
     nepub["NativeEpubViewerAdapter<br/>(future)"]
-    obi["ObsidianBacklinkIndex"]
-    onw["ObsidianNoteWriter"]
+    obi["ObsidianBacklinkIndex<br/>(concrete, injected)"]
+    onw["ObsidianNoteWriter<br/>(concrete, injected)"]
   end
 
   cmd --> ann
   reg --> vp
-  ann --> tmpl & color & nw & dv
+  ann --> tmpl & color & onw & dv
   ann --> pcodec & ecodec
-  rec --> bi & dv
+  rec --> obi & dv
   rec --> pcodec & ecodec
   pdf --> geom
 
   dv -. implemented by .-> pdf & epub & nepub
   vp -. implemented by .-> pdf & epub & nepub
-  bi -. implemented by .-> obi
-  nw -. implemented by .-> onw
 ```
 
 Three layers, with a strict dependency rule: **dependencies point inward.** The core
-depends only on port interfaces and plain data; it never imports `obsidian`,
-`pdfjs`, foliate, or touches the DOM.
+depends only on plain data, the two viewer-port interfaces, and structural types for
+whatever else it is handed; it never imports `obsidian`, `pdfjs`, foliate, or touches
+the DOM.
+
+> **Ports are asymmetric — by design, not by oversight.** Only two seams carry genuine
+> polymorphism: `DocumentViewer` and `ViewerProvider`, each with *three* real
+> implementations (PDF, EPUB, future native-EPUB). These earn named `interface`s. The
+> other framework boundaries (`BacklinkIndex`, `NoteWriter`) have exactly **one**
+> implementation forever — Obsidian's vault/metadata-cache is the only place to read
+> backlinks or write notes — so they are **concrete classes injected into the core**,
+> not ports. The core stays testable not because they are interfaces but because they
+> are *injected*: TypeScript's structural typing lets a test pass a plain fake with the
+> right shape. Testability is bought with dependency injection, not with interface
+> declarations. (`LocatorCodec` is a third case — two implementations, but it wants
+> dispatch, not a contract; see §4.1.)
 
 | Layer | Knows about | Tested how |
 | --- | --- | --- |
-| **Core** | Plain data + port interfaces only | Pure unit tests, no mocks of frameworks |
+| **Core** | Plain data + the two viewer-port interfaces + injected concretes (by structural type) | Pure unit tests, no mocks of frameworks |
 | **Ports** | Nothing (just type signatures) | n/a |
 | **Adapters / integration** | Obsidian, PDF.js, foliate-js, DOM, FS | Thin; integration / manual tests |
 
@@ -200,40 +209,75 @@ interface ViewerProvider {
 A `ViewerRegistry` (core) maps `DocumentRef` → `ViewerProvider`. Adding a backend =
 registering one provider.
 
-### 3.6 `LocatorCodec`, `BacklinkIndex`, `NoteWriter` — supporting ports
+### 3.6 Supporting collaborators — not ports
+
+The pieces below are framework boundaries too, but they are **not** ports. None has
+more than one realistic implementation, so none earns an `interface` in a dedicated
+ports layer. They are plain structural types: the core receives them by injection and
+tests pass fakes of the same shape.
+
+**`LocatorCodec` — a dispatch type, not a port.** There are two implementations (PDF,
+EPUB), but the core never needs to swap one *behaviour contract* for another; it only
+needs to pick the codec for a given backend. So this is a structural type alias used as
+a value in a `Record<BackendId, …>`, not a port interface:
 
 ```ts
-interface LocatorCodec {                        // pure; one per backend
-  readonly backend: BackendId;
+type LocatorCodec = {                           // pure; one value per backend
   encode(loc: Locator): SubpathParams;          // → {page, selection, …} | {epubcfi}
   decode(params: SubpathParams): Locator | null;
-}
+};
+type Codecs = Record<BackendId, LocatorCodec>;  // how the core selects one
+```
 
-interface BacklinkIndex {                        // over Obsidian's metadata cache
-  forDocument(ref: DocumentRef): BacklinkEntry[];
-  onChange(ref: DocumentRef, cb: () => void): Disposable;
+This type is owned by the codec family, so it lives in `core/locator/codec.ts` (§13),
+not in the shared model.
+
+The shared shape is exactly what the contract tests (§11) target — both codecs must
+satisfy the same round-trip property — and a `type` carries that just as well as an
+`interface`, without promoting it to a port.
+
+**`BacklinkIndex`, `NoteWriter` — concrete, injected.** Obsidian's vault and metadata
+cache are the *only* backing store; a future native-EPUB backend does not change them
+(see §12, where both sit on the "unchanged" side). So these are concrete classes
+(`ObsidianBacklinkIndex`, `ObsidianNoteWriter`) constructed in the integration layer
+and injected into the core. The core depends on their *shape*, which a test fake
+satisfies structurally — no interface declaration required:
+
+```ts
+// ObsidianBacklinkIndex (concrete) — over Obsidian's metadata cache
+class ObsidianBacklinkIndex {
+  forDocument(ref: DocumentRef): BacklinkEntry[] { … }
+  onChange(ref: DocumentRef, cb: () => void): Disposable { … }
 }
 interface BacklinkEntry { subpath: SubpathParams; color?: string; source: NoteRef; }
 
-interface NoteWriter {                           // over vault / editor
-  insertIntoTarget(text: string, target: TargetStrategy): Promise<void>;
-  copyToClipboard(text: string): Promise<void>;
+// ObsidianNoteWriter (concrete) — over vault / editor
+class ObsidianNoteWriter {
+  insertIntoTarget(text: string, target: TargetStrategy): Promise<void> { … }
+  copyToClipboard(text: string): Promise<void> { … }
 }
 ```
 
+> Exception that *is* a real seam: `PdfFileIO` (§5.3), the only file-mutating code, is
+> isolated behind a small interface so `pdf-lib` is mockable. It is opt-in (FR-10) and
+> can land after the core.
+
 ## 4. The shared core (pure, unit-tested)
 
-Everything in this section is framework-free and depends only on the ports and plain
-data. This is where Maki's behavior actually lives — and where "common implementation
-for both backends" is realized.
+Everything in this section is framework-free and depends only on the two viewer ports,
+injected collaborators (by structural type), and plain data. This is where Maki's
+behavior actually lives — and where "common implementation for both backends" is
+realized.
 
 ### 4.1 Locator codecs
 
-Two pure implementations of `LocatorCodec` — `PdfLocatorCodec` and `EpubLocatorCodec`
-— translate between `Locator` and the subpath `key=value` map defined in
-[specification.md](./specification.md) §6, including the EPUB CFI percent-encoding.
-Being pure string/struct transforms, they are tested directly against the spec's
-examples (round-trip: `decode(encode(x)) === x`, and fixed golden strings).
+Two pure codecs — `PdfLocatorCodec` and `EpubLocatorCodec`, each a value of the
+`LocatorCodec` type (§3.6) — translate between `Locator` and the subpath `key=value`
+map defined in [specification.md](./specification.md) §6, including the EPUB CFI
+percent-encoding. The core holds them in a `Record<BackendId, LocatorCodec>` and picks
+by backend; no port interface is involved. Being pure string/struct transforms, they
+are tested directly against the spec's examples (round-trip: `decode(encode(x)) === x`,
+and fixed golden strings).
 
 ### 4.2 `TemplateEngine`
 
@@ -248,7 +292,7 @@ subpath value (`name` or `r,g,b`).
 
 ### 4.4 `AnnotationService` — create an annotation
 
-Orchestrates FR-3/FR-4 using only ports:
+Orchestrates FR-3/FR-4 using only injected collaborators and the viewer port:
 
 ```ts
 class AnnotationService {
@@ -256,7 +300,7 @@ class AnnotationService {
     private codecs: Record<BackendId, LocatorCodec>,
     private templates: TemplateEngine,
     private colors: ColorModel,
-    private notes: NoteWriter,
+    private notes: ObsidianNoteWriter,          // concrete, injected (§3.6)
   ) {}
 
   async annotate(viewer: DocumentViewer, color: Color, comment?: string) {
@@ -272,9 +316,9 @@ class AnnotationService {
 }
 ```
 
-The only non-pure things it calls are `viewer.captureSelection()` and `notes.*`, both
-ports — so in tests they are trivial fakes. The construction of the locator, link, and
-snippet (the actual logic) is pure.
+The only non-pure things it calls are `viewer.captureSelection()` (a port) and
+`notes.*` (an injected concrete) — so in tests they are trivial fakes, passed by shape.
+The construction of the locator, link, and snippet (the actual logic) is pure.
 
 ### 4.5 `HighlightReconciler` — render notes as highlights
 
@@ -414,16 +458,17 @@ See §12 for the concrete migration steps.
 
 ## 8. Obsidian integration layer (humble)
 
-A thin layer that registers everything and wires ports to core:
+A thin layer that registers everything and wires the viewer ports + injected
+collaborators to the core:
 
 - **Commands / palette / context menu** (FR-9): translate user intent into calls on
   `AnnotationService`, using the active `DocumentViewer`.
-- **`ObsidianBacklinkIndex`** (`BacklinkIndex`): reads the metadata cache for refs to
+- **`ObsidianBacklinkIndex`** (concrete, §3.6): reads the metadata cache for refs to
   the open document, parses subpaths into `SubpathParams`, emits `onChange` on cache
-  updates → drives `HighlightReconciler`.
-- **`ObsidianNoteWriter`** (`NoteWriter`): clipboard + auto-paste into the target note
+  updates → drives `HighlightReconciler`. Injected into the core, not a port.
+- **`ObsidianNoteWriter`** (concrete, §3.6): clipboard + auto-paste into the target note
   (editor when open, else `vault.process`), with the configurable target strategy
-  (FR-8.3).
+  (FR-8.3). Injected into the core, not a port.
 - **Settings tab**: palette, templates, auto-paste, EPUB rendering prefs (FR-8).
 - **Hover / backlink navigation** (FR-6): register hover-link sources and handle clicks
   on annotation links → `viewer.reveal`.
@@ -441,7 +486,7 @@ sequenceDiagram
   participant V as DocumentViewer (adapter)
   participant AS as AnnotationService (core)
   participant C as LocatorCodec (core)
-  participant NW as NoteWriter (adapter)
+  participant NW as ObsidianNoteWriter (concrete)
 
   U->>CMD: pick color on selection
   CMD->>AS: annotate(viewer, color, comment?)
@@ -488,8 +533,8 @@ The rule: **every framework boundary is a thin adapter; the logic behind it is p
 
 | Concern | Humble object (no logic, not unit-tested) | Pure core (unit-tested) |
 | --- | --- | --- |
-| Create annotation | `captureSelection`, `NoteWriter` | `AnnotationService`, link build, template |
-| Render highlights | `drawHighlight` / `eraseHighlight`, `BacklinkIndex` | `HighlightReconciler` (decode, id, diff, merge) |
+| Create annotation | `captureSelection`, `ObsidianNoteWriter` | `AnnotationService`, link build, template |
+| Render highlights | `drawHighlight` / `eraseHighlight`, `ObsidianBacklinkIndex` | `HighlightReconciler` (decode, id, diff, merge) |
 | Link format | — | `LocatorCodec` (encode/decode, CFI encoding) |
 | PDF geometry | acquire text boxes, inject `<div>`s | `PdfGeometry` (rects, merging) |
 | EPUB geometry | foliate overlayer | (none needed) |
@@ -501,6 +546,13 @@ The rule: **every framework boundary is a thin adapter; the logic behind it is p
 If a piece is hard to unit-test, it belongs in the left column and must be trivial; if
 it contains a decision, it belongs in the right column.
 
+> What makes the right column testable is **injection**, not interfaces. The core
+> receives its collaborators as constructor/method arguments and a test passes fakes of
+> the same shape — TypeScript matches structurally. Only the two genuinely-polymorphic
+> seams (`DocumentViewer`, `ViewerProvider`) are named `interface`s; everything else the
+> core depends on is a concrete class or a plain type, injected. "Wanting to test it" is
+> a reason to inject a dependency, never on its own a reason to declare a port (§3.6).
+
 ## 11. Testing strategy
 
 - **Unit (the bulk).** Core modules with no mocks of frameworks — only plain data and
@@ -511,9 +563,11 @@ it contains a decision, it belongs in the right column.
     subpath; verifies exact `draw`/`erase` calls on a fake `DocumentViewer`.
   - `AnnotationService`: selection → snippet, with fake viewer/codec/writer.
   - `TemplateEngine`, `ColorModel`, `PdfGeometry`: pure I/O tables and fixtures.
-- **Contract tests for ports.** A shared suite any `DocumentViewer` /
-  `LocatorCodec` implementation must pass, so PDF, EPUB, and future native-EPUB
-  adapters are held to the same behavior.
+- **Shared contract suites.** A suite any `DocumentViewer` implementation must pass (the
+  one real port with multiple adapters), plus a suite every codec value must satisfy
+  (the shared round-trip property of the `LocatorCodec` type) — so PDF, EPUB, and future
+  native-EPUB are held to the same behavior. The codec suite is a contract over a *type*,
+  not a port; it works the same way.
 - **Integration / manual.** Adapter behavior against real Obsidian / PDF.js /
   foliate-js (selection capture, reveal, overlay rendering) — necessarily thin, since
   the adapters carry no logic.
@@ -541,26 +595,81 @@ Unchanged in all cases: `AnnotationService`, `HighlightReconciler`, `TemplateEng
 
 ## 13. Module layout (proposed)
 
+Layer-based, not feature-based: the dominant axis here is "pure vs framework-bound"
+(every feature — annotate, highlight, navigate — shares the *same* thin vertical slice
+of viewer + codec + writer), and that axis is horizontal. Start **flat and grow into
+structure**, rather than committing to deep directories before the code exists.
+
+The placement rule is **semantic, not syntactic**: a file's home is decided by *who owns
+the thing*, never by *what kind of thing it is*. "It's a type" or "it's a port" is not a
+reason to pool things together. So:
+
+- A definition owned by **one** module lives **next to that module** (co-located).
+- A definition that is **shared vocabulary** — multiple core modules depend on it as
+  equals and no single module owns it — lives in **one central module** (`core/types.ts`).
+  Note this file earns its name *after* the rule above is applied: because module-owned
+  types have been co-located elsewhere, what remains is exactly the core's shared
+  vocabulary — a cohesive unit, not a syntactic dumping ground for "anything that is a type".
+
 ```
 src/
-  core/                     # pure, framework-free, unit-tested
-    locator/                #   PdfLocatorCodec, EpubLocatorCodec, types
-    annotate/               #   AnnotationService
-    highlight/              #   HighlightReconciler
-    pdf-geometry/           #   PdfGeometry (math)
-    template/               #   TemplateEngine
-    color/                  #   ColorModel
-    registry.ts             #   ViewerRegistry
-  ports/                    # interface-only: DocumentViewer, ViewerProvider,
-                            #   LocatorCodec, BacklinkIndex, NoteWriter
+  core/                       # pure, framework-free, unit-tested (flat)
+    types.ts                  #   shared vocabulary owned by no single module (NOT a
+                              #     catch-all — module-owned types co-locate elsewhere):
+                              #     BackendId, DocumentRef, Locator/PdfLocator/EpubLocator,
+                              #     TextSelection, Highlight, HighlightId, Color, NoteRef,
+                              #     SubpathParams, BacklinkEntry
+    document-viewer.ts        #   interface DocumentViewer (+ DocumentMetadata, ViewerHost)
+    viewer-provider.ts        #   interface ViewerProvider (+ PluginContext)
+    annotation-service.ts     #   AnnotationService
+    highlight-reconciler.ts   #   HighlightReconciler
+    template-engine.ts        #   TemplateEngine
+    color-model.ts            #   ColorModel (the value↔RGB logic; the `Color` *type* is in types.ts)
+    pdf-geometry.ts           #   PdfGeometry (rect math)
+    viewer-registry.ts        #   ViewerRegistry
+    locator/                  #   ← the one concern that starts as a directory
+      codec.ts                #     type LocatorCodec, Codecs (owned by the codec family)
+      pdf-codec.ts            #     PdfLocatorCodec
+      epub-codec.ts           #     EpubLocatorCodec
+      cfi.ts                  #     CFI percent-encode / unwrap edge cases
   backends/
-    pdf/                    # PdfViewerProvider/Adapter, patches, PdfFileIO (opt.)
-    epub/                   # EpubViewerProvider/Adapter, foliate host, vault loader
-    epub-native/            # (future)
-  obsidian/                 # commands, settings, ObsidianBacklinkIndex/NoteWriter
-  vendor/foliate-js/        # pinned, MIT
-  main.ts                   # plugin entry: construct core, register providers
+    pdf/                      # PdfViewerProvider/Adapter, patches, PdfFileIO (opt.)
+    epub/                     # EpubViewerProvider/Adapter, foliate host, vault loader
+  obsidian/                   # commands, settings, ObsidianBacklinkIndex/NoteWriter, wiring
+  vendor/foliate-js/          # pinned, MIT
+  main.ts                     # plugin entry: construct core, register providers
 ```
+
+Differences from the earlier sketch, and why:
+
+1. **`core/` is flat** (except `locator/`). Each former subdirectory held ~one class;
+   a directory per file only deepens import paths without adding cohesion. Split a file
+   into a directory *when it grows* — a one-way, mechanical move — rather than collapsing
+   over-nesting later. (`locator/` is the exception: two codecs + CFI edge cases + golden
+   tests will certainly span several files.)
+2. **No `ports/` directory, and no `ports.ts` either.** `DocumentViewer` and
+   `ViewerProvider` are two *independent* seams that grow on different axes (the viewer
+   contract grows as backends are added; the provider grows as acquisition strategies —
+   patch vs mount — diverge). Their only link is one-directional: `ViewerProvider.acquire`
+   returns a `DocumentViewer` — a single `import`, not a reason to share a file. Pooling
+   them as `ports.ts` would be the same syntactic mistake as `types.ts`. So they get one
+   file each, *next to* the core — never co-located with a backend, which would invert the
+   dependency rule (§2).
+3. **`types.ts` holds only shared vocabulary, not every type.** Module-owned types do
+   **not** live here — they co-locate with their owner: `LocatorCodec` → `locator/`,
+   `DocumentMetadata`/`ViewerHost` → `document-viewer.ts`, `PluginContext` →
+   `viewer-provider.ts`. `Locator` stays central even though codecs transform it: a codec
+   *consumes and converts* `Locator`, it does not *own* the vocabulary — putting `Locator`
+   in `locator/` would invert the dependency (the central abstraction held hostage by one
+   leaf transformer; see §3.2). Likewise `Color` is central while `ColorModel` (the
+   conversion logic) is its own file. `BacklinkEntry` is central too: it is produced in
+   `obsidian/` but consumed by the core, which cannot import `obsidian/`, so the *type*
+   lives in `types.ts` and the adapter implements it.
+4. **No `epub-native/` placeholder.** §12 guarantees the ports don't change when that
+   backend arrives, so adding `backends/epub-native/` then costs nothing — an empty
+   directory now is pure debt.
+5. **`BacklinkIndex`/`NoteWriter` live in `obsidian/`** as concrete classes, not as port
+   interfaces (§3.6).
 
 ## 14. Risks and open questions
 
