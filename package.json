@@ -1,0 +1,22 @@
+{
+  "name": "obsidian-maki",
+  "version": "0.1.0",
+  "description": "Read and annotate PDF and EPUB documents inside Obsidian, with markdown notes as the source of truth.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc --noEmit && node esbuild.config.mjs production",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.24.0",
+    "obsidian": "^1.7.2",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

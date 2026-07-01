@@ -14,12 +14,13 @@ to EPUB.
 
 ## Project status
 
-**Pre-implementation.** The repository currently contains only design documents
-(`docs/`), a Nix dev shell (`flake.nix`), and license/readme files. There is **no
-source tree, no `package.json`, no `manifest.json`, and no build/test tooling yet** —
-these are described in the docs as the intended setup but do not exist on disk. When
-implementing, you are creating this structure for the first time; follow the
-design docs as the spec.
+**Core implemented; adapters pending.** The pure core (`src/core/`, incl. the
+`locator/` codec family) exists with full unit tests, plus the build/test tooling
+(`package.json`, `manifest.json`, esbuild, Vitest) and a minimal `src/main.ts` entry.
+**Not yet implemented:** the PDF and EPUB adapters (`src/backends/`), the Obsidian
+integration layer (`src/obsidian/` — `ObsidianBacklinkIndex`, `ObsidianNoteWriter`,
+commands, settings), and the vendored foliate-js. Follow the design docs as the spec
+when adding these.
 
 ## Read the docs first
 
@@ -72,7 +73,8 @@ exposes no pages, iframes, CFIs, or DOM nodes — those leak only into adapters.
   gracefully.
 - **EPUB** is rendered by **foliate-js** in a plugin-owned `ItemView` (`maki-epub`),
   because Obsidian has no native EPUB viewer. foliate-js is **vendored at a pinned
-  revision** (no npm release, not API-stable) under `src/vendor/foliate-js/`.
+  revision** (no npm release, not API-stable) under `src/vendor/foliate-js/`. It is not
+  dependency-free: EPUB reading requires `@zip.js/zip.js` (regular npm dependency).
 
 A future native-Obsidian-EPUB backend is planned to slot in behind the same ports
 without touching the core (design §7, §12).
@@ -101,11 +103,26 @@ These are easy to violate and expensive to get wrong:
   bodies (it breaks CFI round-tripping) — draw highlights only in foliate's separate SVG
   overlayer.
 
-## Intended toolchain (per the docs — not yet set up)
+## Toolchain
 
-The design specifies **Node 22 + pnpm + TypeScript + esbuild**, with a fast unit runner
-(e.g. Vitest) over `core/`. The Nix dev shell (`flake.nix`) already provides `nodejs_22`
-and `pnpm`; enter it via `direnv` (an `.envrc` is present) or `nix develop`. When you
-add tooling, prefer these choices to stay consistent with the design, and update this
-section with the actual `pnpm` scripts once they exist. The core has no DOM/Obsidian
-imports, so its tests run without a browser environment.
+**Node 22 + pnpm + TypeScript + esbuild**, with **Vitest** over `core/`. The Nix dev
+shell (`flake.nix`) provides `nodejs_22` and `pnpm`; enter it via `direnv` (an `.envrc`
+is present) or `nix develop`. The core has no DOM/Obsidian imports, so its tests run
+without a browser environment (`environment: "node"` in `vitest.config.ts`).
+
+Scripts:
+
+- `pnpm test` — run the unit suite once (`pnpm test:watch` to watch)
+- `pnpm typecheck` — `tsc --noEmit` (strict, incl. `noUncheckedIndexedAccess`)
+- `pnpm build` — typecheck + production esbuild bundle to `main.js`
+- `pnpm dev` — esbuild watch mode
+
+Tests are colocated with their source (`foo.ts` → `foo.test.ts`); the shared codec
+contract suite lives in `src/core/locator/codec-contract.ts` and the recording
+`DocumentViewer` fake in `src/core/fake-document-viewer.ts`.
+
+The full dependency policy — what is depended on, what was rejected and why, and what
+is deliberately absent (no template engine, no CFI parser, no UI framework, no bundled
+PDF.js) — is design §15. Runtime dependencies are intentionally minimal:
+`monkey-around` + `@zip.js/zip.js` + vendored foliate-js; `@cantoo/pdf-lib` (not
+upstream pdf-lib, which is unmaintained) is deferred until FR-10.

@@ -266,8 +266,8 @@ class ObsidianNoteWriter {
 ```
 
 > Exception that *is* a real seam: `PdfFileIO` (§5.3), the only file-mutating code, is
-> isolated behind a small interface so `pdf-lib` is mockable. It is opt-in (FR-10) and
-> can land after the core.
+> isolated behind a small interface so the PDF-writing library is mockable. It is
+> opt-in (FR-10) and can land after the core.
 
 ## 4. The shared core (pure, unit-tested)
 
@@ -405,6 +405,11 @@ PDFView → PDFViewerComponent (viewer) → PDFViewerChild (child)
 only when a PDF is first opened). `acquire()` wraps a live `PDFViewerChild` in a
 `PdfViewerAdapter`.
 
+Type coverage for these private classes comes from **`obsidian-typings`** (dev-only),
+which types Obsidian's undocumented API surface including the PDF view stack. Types
+are documentation, not a guarantee — the runtime version guards above are still
+mandatory.
+
 ### 5.2 What the adapter implements
 
 | `DocumentViewer` member | How (humble) |
@@ -422,9 +427,15 @@ reality and the abstract types. All decisions are made by the core.
 ### 5.3 Optional: embed annotations into the PDF (FR-10)
 
 A separate, opt-in `PdfAnnotationWriter` writes real PDF text-markup annotations via
-`pdf-lib`, behind a small `PdfFileIO` interface (mockable). This mirrors
+**`@cantoo/pdf-lib`** (the maintained, API-compatible fork of pdf-lib — upstream
+`Hopding/pdf-lib` has been unmaintained for years; `mupdf.js` was rejected on license
+grounds, AGPL), behind a small `PdfFileIO` interface (mockable). This mirrors
 obsidian-pdf-plus's existing `IPdfIo` seam and keeps the only file-mutating code
 isolated and replaceable. Default mode never touches the file.
+
+Because FR-10 is secondary and `PdfFileIO` is a real seam, **the dependency itself is
+not added until FR-10 is implemented** — the initial release ships without any
+PDF-writing library.
 
 ## 6. EPUB backend (adapter — humble)
 
@@ -451,8 +462,10 @@ new EPUB({ loadText, loadBlob, getSize, sha1 }).init()
 ```
 
 Maki supplies `loadText` / `loadBlob` / `getSize` over the EPUB (read via Obsidian's
-file API, unzipped with foliate's bundled zip reader), so books load straight from the
-vault.
+file API, unzipped with **`@zip.js/zip.js`** — foliate-js does *not* bundle a zip
+reader; its README requires zip.js for Zip-based formats, and it is the only library
+supporting random access over `File` objects), so books load straight from the vault.
+zip.js is a regular npm dependency (BSD-3-Clause), not vendored.
 
 ### 6.2 What the adapter implements
 
@@ -475,7 +488,11 @@ vault.
   not in the text flow. Styling is injected only via `renderer.setStyles` and
   `::part(filter)` (for theme follow).
 - **Vendored, pinned.** foliate-js has no npm release and is not API-stable; it is
-  vendored at a pinned revision (MIT, dependency-free) and bundled.
+  vendored at a pinned revision (MIT) and bundled, with the pinned commit SHA recorded
+  in `src/vendor/foliate-js/`. It is *not* dependency-free: EPUB reading requires
+  zip.js (supplied as the npm dependency `@zip.js/zip.js`, see §6.1). Its other
+  optional dependency, fflate, is only needed for KF8/MOBI fonts and is **not**
+  included while EPUB is the only foliate format Maki supports.
 
 ## 7. Future backend: native Obsidian EPUB
 
@@ -586,7 +603,7 @@ The rule: **every framework boundary is a thin adapter; the logic behind it is p
 | Colors / templates | — | `ColorModel`, `TemplateEngine` |
 | Viewer acquisition | `ViewerProvider.setup/acquire`, patches | `ViewerRegistry` (selection by ref) |
 | Navigation | `reveal` (scroll), click handlers | locator decode, target resolution |
-| PDF file embed (opt.) | `PdfFileIO` (pdf-lib) | annotation-dict assembly inputs |
+| PDF file embed (opt.) | `PdfFileIO` (`@cantoo/pdf-lib`) | annotation-dict assembly inputs |
 
 If a piece is hard to unit-test, it belongs in the left column and must be trivial; if
 it contains a decision, it belongs in the right column.
@@ -619,9 +636,11 @@ it contains a decision, it belongs in the right column.
   foliate-js (selection capture, reveal, overlay rendering) — necessarily thin, since
   the adapters carry no logic.
 
-Test stack: the project uses Node 22 + pnpm + TypeScript + esbuild; a fast unit runner
-(e.g. Vitest) over the `core/` modules. The core has no DOM/Obsidian imports, so it
-runs without a browser environment.
+Test stack: the project uses Node 22 + pnpm + TypeScript + esbuild; **Vitest** as the
+unit runner over the `core/` modules (native ESM/TS, no transform config; Jest's ESM
+story would cost setup for nothing here, and `node:test` saves too little to be worth
+the DX loss). The core has no DOM/Obsidian imports, so it runs without a browser
+environment — no jsdom.
 
 ## 12. Migration plan: foliate → native EPUB
 
@@ -739,3 +758,44 @@ Differences from the earlier sketch, and why:
 - **Open:** exact target-selection strategy for auto-paste; whether to offer a
   dedicated annotations panel; whether `epub-native` should reuse `backend: 'epub'` or
   be distinct.
+
+## 15. Dependencies
+
+The dependency posture is deliberately minimal: two runtime npm dependencies plus one
+vendored library. Every candidate below was chosen against named alternatives; the
+rejections matter as much as the picks.
+
+### Runtime
+
+| Dependency | Why | Rejected alternatives |
+| --- | --- | --- |
+| `monkey-around` | Safe, unpatchable-order-aware prototype patching; the de-facto community standard (obsidian-pdf-plus uses it). Hand-rolling would re-invent the multi-plugin unpatch-ordering problem. | hand-rolled patching |
+| `@zip.js/zip.js` | Required by foliate-js for Zip-based formats; the only zip library with random access over `File` objects. BSD-3-Clause. | — (foliate-js hard requirement) |
+| **vendored:** `foliate-js` (pinned SHA) | Actively maintained; character-offset-accurate CFI generation *and* resolution (the project's lifeline); SVG-overlayer annotation API matches the never-touch-section-DOM constraint (§6.3) exactly. No npm release, API unstable ⇒ vendored and pinned. | **epub.js** (effectively unmaintained; word-granularity CFIs break locator durability), **Readium** (full reading-system scale, poor fit for embedding + overlay control), self-built renderer (cost exceeds the plugin itself) |
+| *deferred until FR-10:* `@cantoo/pdf-lib` | Maintained, API-compatible fork of pdf-lib. Not installed until the opt-in embed mode lands (§5.3). | **pdf-lib** upstream (unmaintained for years), **mupdf.js** (AGPL — incompatible), pdfkit/jsPDF (generation-oriented, unfit for annotating existing files) |
+
+### Deliberately absent
+
+- **Template engine** (Handlebars/Eta/mustache): spec §6.6 needs pure `{{var}}`
+  substitution — no conditionals, no loops. ~30 lines in `core/template-engine.ts`;
+  an external engine adds only size and an eval-shaped attack surface.
+- **CFI parser** (`epub-cfi-resolver` etc.): the core treats CFIs as opaque strings
+  and only percent-encodes/decodes (spec §6.4); resolution is foliate-js's job.
+  Importing a parser into the core would break its purity for nothing.
+- **UI framework** (React/Svelte): the EPUB chrome is TOC + prev/next + progress
+  (FR-1.6). Plain DOM suffices; a framework fattens exactly the layer that must stay
+  humble.
+- **Bundled PDF.js** (`pdfjs-dist` at runtime): would drop the private-API risk but
+  costs 2 MB+, forfeits Obsidian-native link interoperability (a spec §6.3
+  requirement), and duplicates the viewer. `pdfjs-dist` appears as a **dev-only**
+  dependency for its type definitions.
+
+### Development
+
+| Dependency | Why | Rejected alternatives |
+| --- | --- | --- |
+| `esbuild` | Obsidian's official sample-plugin standard; the CJS single-`main.js` + `obsidian`-external output shape is its well-trodden path. | Vite (dev-server-centric, library mode is a detour here), tsup (thin esbuild wrapper adding nothing) |
+| `vitest` | Native ESM/TS, no jsdom needed for `core/` (§11). | Jest (ESM via transforms — config cost for nothing), `node:test` (too little saved for the DX loss) |
+| `obsidian` | Official API typings. | — |
+| `obsidian-typings` | Types for the undocumented API surface, incl. the PDF view stack patched in §5.1. Types ≠ guarantees; runtime version guards remain mandatory. | untyped `any` casts |
+| `pdfjs-dist` | Type definitions only; runtime uses Obsidian's bundled PDF.js. | — |
