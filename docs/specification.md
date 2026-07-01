@@ -84,6 +84,9 @@ workflow, generalized so that PDF and EPUB behave the same way.
 - **FR-1.4** Remember and restore the last reading position per document (PDF: page +
   scroll; EPUB: location/CFI). This is a *reading* position, not an annotation.
 - **FR-1.5** Apply Obsidian's theme (light/dark) to the EPUB preview.
+- **FR-1.6** Provide EPUB reading navigation: a table of contents, previous/next
+  section, and a reading-progress indicator. (PDF needs none of this — Obsidian's
+  built-in viewer already has thumbnails, outline, and search.)
 
 ### FR-2 — Select text
 
@@ -118,6 +121,14 @@ workflow, generalized so that PDF and EPUB behave the same way.
   reload.
 - **FR-5.4** No data is written to the document file in this mode — highlights are
   purely a rendering of the notes.
+- **FR-5.5** A backlink whose locator cannot be decoded or resolved is **skipped
+  without affecting other highlights**, and skipped entries are surfaced to the user
+  (e.g. a count in the preview toolbar) — never silently dropped, never an error that
+  blocks rendering.
+- **FR-5.6** When multiple annotations target the same locator, they are drawn as
+  **one** highlight with merged sources (all of them reachable per FR-6.3). If their
+  colors differ, the color of the first entry in note-path order wins — a
+  deterministic rule, so rendering never flickers between reloads.
 
 ### FR-6 — Navigate both directions
 
@@ -125,6 +136,10 @@ workflow, generalized so that PDF and EPUB behave the same way.
   the document, scrolls to the locator, and briefly flashes the passage.
 - **FR-6.2** Clicking a highlight in the preview reveals / opens its source note(s).
 - **FR-6.3** When several annotations target the same passage, surface all of them.
+- **FR-6.4** If a locator no longer resolves exactly (the document changed since the
+  annotation was made), degrade gracefully: navigate to the nearest coarse position
+  (PDF: the page; EPUB: the chapter/section) and tell the user the exact passage could
+  not be found. Never fail silently, and never let one broken link block others.
 
 ### FR-7 — Manage highlights
 
@@ -132,6 +147,10 @@ workflow, generalized so that PDF and EPUB behave the same way.
   annotation link in markdown (consistent with FR-5).
 - **FR-7.2** Hovering a highlight shows its source note(s) and comment via Obsidian's
   hover preview.
+- **FR-7.3** *(convenience)* Right-clicking a highlight in the preview offers *Show
+  source note*, *Copy link*, and *Delete annotation*. Delete works by **editing the
+  source note** (removing the link) — a shortcut to FR-7.1, not a second store, so
+  markdown remains the source of truth.
 
 ### FR-8 — Configuration
 
@@ -150,6 +169,10 @@ workflow, generalized so that PDF and EPUB behave the same way.
 - **FR-9.2** A color palette in the preview toolbar; one click copies a colored link
   to the current selection.
 - **FR-9.3** A right-click context menu in the preview offering the same actions.
+- **FR-9.4** Every action whose effect is not visible in place (copy to clipboard,
+  auto-paste into a note in another pane, mode toggles) confirms itself with an
+  Obsidian notice (e.g. "Link copied") — the user should never wonder whether the
+  action fired.
 
 ### FR-10 — Optional: embed annotations into the file *(secondary)*
 
@@ -297,11 +320,17 @@ backend-specific labels — `page`, `pageLabel`, `pageCount` (PDF); `chapter`,
   selected text may be stored alongside the locator to help re-anchor (see design).
 - **foliate-js is not API-stable** and ships no npm release; it is vendored at a pinned
   revision.
+- **Platform.** Desktop is the primary target for the initial release. Obsidian Mobile
+  is best-effort: the PDF view patches and iframe/CSP behavior differ in mobile
+  WebViews and are unverified there. Features must detect an unsupported environment
+  and disable themselves gracefully rather than break.
 
 ## 9. Out of scope / future
 
 - Additional foliate formats (MOBI/AZW3/FB2/CBZ).
 - Two-way edit of embedded PDF annotations created by other tools.
+- Full-text search inside the EPUB preview (PDF search comes free with Obsidian's
+  viewer).
 - A dedicated annotations side panel (beyond Obsidian's backlink pane).
 - Migration to a **native Obsidian EPUB viewer** when one ships — planned for and made
   cheap by the design (see [design.md](./design.md) §"Migration plan"), but not a

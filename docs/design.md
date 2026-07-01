@@ -166,8 +166,13 @@ interface DocumentViewer {
   readonly backend: BackendId;
   readonly ref: DocumentRef;
 
-  /** Navigate to a locator and briefly flash it (FR-6.1). */
-  reveal(target: Locator, opts?: { flash?: boolean }): Promise<void>;
+  /** Navigate to a locator and briefly flash it (FR-6.1). Resolves with how
+   *  precisely the target was reached — 'fallback' means the exact passage no
+   *  longer resolves and the nearest coarse position (page / section) was used —
+   *  so the integration layer can notify the user (FR-6.4) without the adapter
+   *  making that decision. */
+  reveal(target: Locator, opts?: { flash?: boolean }): Promise<RevealOutcome>;
+  // type RevealOutcome = 'exact' | 'fallback' | 'not-found'  (owned by this file)
 
   /** The current live user selection, as an abstract selection, or null. */
   captureSelection(): TextSelection | null;
@@ -255,6 +260,8 @@ interface BacklinkEntry { subpath: SubpathParams; color?: string; source: NoteRe
 class ObsidianNoteWriter {
   insertIntoTarget(text: string, target: TargetStrategy): Promise<void> { … }
   copyToClipboard(text: string): Promise<void> { … }
+  /** FR-7.3: delete-from-preview = remove the link from its note. */
+  removeLink(source: NoteRef, subpath: SubpathParams): Promise<void> { … }
 }
 ```
 
@@ -320,6 +327,12 @@ The only non-pure things it calls are `viewer.captureSelection()` (a port) and
 `notes.*` (an injected concrete) — so in tests they are trivial fakes, passed by shape.
 The construction of the locator, link, and snippet (the actual logic) is pure.
 
+`buildLink` — assembling the full `[[path#subpath|display]]` string, including the
+serialization of `SubpathParams` to the `key=value&…` text — is owned by the locator
+family (`core/locator/link.ts`, §13). It sits on the same persisted contract as the
+codecs (spec §6) and is golden-tested with them; leaving it unowned would scatter the
+contract's string handling across callers.
+
 ### 4.5 `HighlightReconciler` — render notes as highlights
 
 Implements FR-5: keep the viewer's highlights in sync with the notes. This is the most
@@ -328,25 +341,41 @@ backend-specific step (decode subpath → locator) is delegated to the codec.
 
 ```ts
 class HighlightReconciler {
-  reconcile(viewer: DocumentViewer, entries: BacklinkEntry[]) {
+  /** Per-viewer state — several documents can be open at once. */
+  private current = new Map<DocumentViewer, Map<HighlightId, Highlight>>();
+
+  reconcile(viewer: DocumentViewer, entries: BacklinkEntry[]): ReconcileSummary {
     const desired = new Map<HighlightId, Highlight>();
+    let skipped = 0;
     for (const e of entries) {
       const loc = this.codecs[viewer.backend].decode(e.subpath);
-      if (!loc) continue;                        // ignore links without a location
+      if (!loc) { skipped++; continue; }         // undecodable ⇒ skip but count (FR-5.5)
       const h = toHighlight(loc, e);             // pure: id, color, merge sources
-      mergeInto(desired, h);                     // same id ⇒ merge note sources
+      mergeInto(desired, h);                     // same id ⇒ merge; first color wins (FR-5.6)
     }
-    diff(this.current, desired)                  // pure set diff
+    const prev = this.current.get(viewer) ?? new Map();
+    diff(prev, desired)                          // pure set diff
       .added.forEach(h => viewer.drawHighlight(h))
       .removed.forEach(id => viewer.eraseHighlight(id));
-    this.current = desired;
+    this.current.set(viewer, desired);
+    return { drawn: desired.size, skipped };     // integration surfaces `skipped` (FR-5.5)
   }
+
+  /** Forget a closed viewer's state (called from the viewer's dispose path, §8). */
+  detach(viewer: DocumentViewer): void { this.current.delete(viewer); }
 }
 ```
 
 The wiring (`BacklinkIndex.onChange → reconcile`) lives in the integration layer; the
 diffing, id derivation, color resolution, and source merging are pure and exhaustively
-unit-tested (add / remove / recolor / duplicate-target / malformed-subpath cases).
+unit-tested (add / remove / recolor / duplicate-target / malformed-subpath /
+multi-viewer / detach cases). Note the state is **keyed by viewer**: a single-field
+`this.current` would silently cross-wire highlights the moment two documents are open,
+and `detach` is what keeps closed viewers from leaking.
+
+`drawHighlight` on the adapter side is **best-effort and must not throw**: a locator
+that decodes but no longer resolves in the document draws nothing (the link still
+works via `reveal`'s fallback, FR-6.4).
 
 ### 4.6 `PdfGeometry` — PDF highlight math (pure part)
 
@@ -385,6 +414,7 @@ only when a PDF is first opened). `acquire()` wraps a live `PDFViewerChild` in a
 | `drawHighlight(h)` | Ask `PdfGeometry` (pure) for rects, then inject absolutely-positioned `<div>`s into a per-page overlay layer. |
 | `onHighlightActivate` | Click handler on the injected overlay elements. |
 | `onSelectionChange` | `pointerup` / `selectionchange` listeners on the viewer container. |
+| Re-apply on page render | PDF.js **virtualizes pages** — offscreen pages are destroyed together with any injected overlay. A `pagerendered` listener re-injects that page's current highlights (the PDF mirror of EPUB's `create-overlay`, §6.2). |
 
 The adapter contains **no annotation logic** — it only converts between Obsidian/PDF.js
 reality and the abstract types. All decisions are made by the core.
@@ -407,6 +437,11 @@ Because Obsidian has no native EPUB view, `EpubViewerProvider.setup()` registers
 custom `ItemView` (view type `maki-epub`) and associates it with the `.epub` extension.
 `acquire()` mounts a foliate `<foliate-view>` element in that view and wraps it in an
 `EpubViewerAdapter`.
+
+The `ItemView` also owns the **reader chrome** (FR-1.6): a TOC control fed by foliate's
+`book.toc`, previous/next section buttons over `view.prev()`/`view.next()`, and a
+progress indicator from the `relocate` event. All of it is humble — presentation of
+foliate state, no decisions.
 
 A vault-backed loader feeds foliate's EPUB parser:
 
@@ -465,7 +500,16 @@ collaborators to the core:
   `AnnotationService`, using the active `DocumentViewer`.
 - **`ObsidianBacklinkIndex`** (concrete, §3.6): reads the metadata cache for refs to
   the open document, parses subpaths into `SubpathParams`, emits `onChange` on cache
-  updates → drives `HighlightReconciler`. Injected into the core, not a port.
+  updates → drives `HighlightReconciler`. Change events are **debounced** here — the
+  metadata cache fires on every keystroke while a note is edited, and reconciling per
+  keystroke would thrash the overlay. Injected into the core, not a port.
+- **Viewer lifecycle** (the ownership question the diagrams don't show): on file-open,
+  the integration layer asks `ViewerRegistry` for the provider, `acquire()`s a
+  `DocumentViewer`, runs an initial `reconcile`, and subscribes
+  `BacklinkIndex.onChange → reconcile`. On close, it disposes that subscription, calls
+  `reconciler.detach(viewer)` (§4.5) and `viewer.destroy()`. Every subscription is a
+  `Disposable` registered with the plugin, so unloading the plugin tears everything
+  down in one pass.
 - **`ObsidianNoteWriter`** (concrete, §3.6): clipboard + auto-paste into the target note
   (editor when open, else `vault.process`), with the configurable target strategy
   (FR-8.3). Injected into the core, not a port.
@@ -525,6 +569,7 @@ click backlink → integration resolves DocumentRef + subpath
               → LocatorCodec.decode (core)
               → ViewerRegistry.acquire (open if needed)
               → DocumentViewer.reveal(locator, { flash: true })
+              → on 'fallback' / 'not-found': show a notice (FR-6.4)
 ```
 
 ## 10. Humble object pattern — the testability map
@@ -557,10 +602,12 @@ it contains a decision, it belongs in the right column.
 
 - **Unit (the bulk).** Core modules with no mocks of frameworks — only plain data and
   fake ports:
-  - `LocatorCodec`: round-trip + golden strings against spec §6 (both backends; CFI
-    percent-encoding edge cases).
+  - `LocatorCodec` + `link.ts`: round-trip + golden strings against spec §6 (both
+    backends; CFI percent-encoding edge cases; subpath serialization).
   - `HighlightReconciler`: add / remove / recolor / duplicate-target / malformed
-    subpath; verifies exact `draw`/`erase` calls on a fake `DocumentViewer`.
+    subpath / color conflict (FR-5.6) / two viewers open / detach; verifies exact
+    `draw`/`erase` calls on a fake `DocumentViewer` and the returned skip counts
+    (FR-5.5).
   - `AnnotationService`: selection → snippet, with fake viewer/codec/writer.
   - `TemplateEngine`, `ColorModel`, `PdfGeometry`: pure I/O tables and fixtures.
 - **Shared contract suites.** A suite any `DocumentViewer` implementation must pass (the
@@ -618,8 +665,9 @@ src/
                               #     catch-all — module-owned types co-locate elsewhere):
                               #     BackendId, DocumentRef, Locator/PdfLocator/EpubLocator,
                               #     TextSelection, Highlight, HighlightId, Color, NoteRef,
-                              #     SubpathParams, BacklinkEntry
-    document-viewer.ts        #   interface DocumentViewer (+ DocumentMetadata, ViewerHost)
+                              #     SubpathParams, BacklinkEntry, Disposable
+    document-viewer.ts        #   interface DocumentViewer (+ DocumentMetadata, ViewerHost,
+                              #     RevealOutcome)
     viewer-provider.ts        #   interface ViewerProvider (+ PluginContext)
     annotation-service.ts     #   AnnotationService
     highlight-reconciler.ts   #   HighlightReconciler
@@ -632,6 +680,8 @@ src/
       pdf-codec.ts            #     PdfLocatorCodec
       epub-codec.ts           #     EpubLocatorCodec
       cfi.ts                  #     CFI percent-encode / unwrap edge cases
+      link.ts                 #     buildLink: [[path#subpath|display]] assembly;
+                              #     SubpathParams ↔ `key=value&…` string (§4.4)
   backends/
     pdf/                      # PdfViewerProvider/Adapter, patches, PdfFileIO (opt.)
     epub/                     # EpubViewerProvider/Adapter, foliate host, vault loader
@@ -683,6 +733,9 @@ Differences from the earlier sketch, and why:
 - **foliate-js instability.** Pinned vendoring; a thin adapter limits blast radius.
 - **EPUB security.** Strict CSP is mandatory; revisit if Obsidian/Electron defaults
   change.
+- **Settings need a schema version from day one.** Palette, templates, and reading
+  positions are persisted plugin data; a `version` field costs one line now and makes
+  every future settings migration cheap instead of a guessing game.
 - **Open:** exact target-selection strategy for auto-paste; whether to offer a
   dedicated annotations panel; whether `epub-native` should reuse `backend: 'epub'` or
   be distinct.
