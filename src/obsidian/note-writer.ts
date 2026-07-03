@@ -9,11 +9,33 @@ import { MarkdownView, TFile, type App, type WorkspaceLeaf } from "obsidian";
 import { removeAnnotationLink } from "../core/locator/link";
 import type { NoteRef, SubpathParams, TargetStrategy } from "../core/types";
 
+/** Desktop-only escape hatch; null on mobile, where the caller's error surfaces. */
+function electronClipboard(): { writeText(text: string): void } | null {
+  try {
+    const req = (window as { require?: (id: string) => unknown }).require;
+    const electron = req?.("electron") as
+      | { clipboard?: { writeText(text: string): void } }
+      | undefined;
+    return electron?.clipboard ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export class ObsidianNoteWriter {
   constructor(private readonly app: App) {}
 
   async copyToClipboard(text: string): Promise<void> {
-    await navigator.clipboard.writeText(text);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      // Chromium rejects top-frame writes while the focused frame is an EPUB
+      // section iframe ("Document is not focused") — exactly where auto-copy
+      // and relayed hotkeys run. Electron's clipboard has no focus rule.
+      const clipboard = electronClipboard();
+      if (!clipboard) throw error;
+      clipboard.writeText(text);
+    }
   }
 
   /**
