@@ -16,7 +16,13 @@
     "@types/node": "^22.10.0",
     "esbuild": "^0.24.0",
     "obsidian": "^1.7.2",
+    "obsidian-typings": "^6.19.0",
+    "pdfjs-dist": "^6.1.200",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
+  },
+  "dependencies": {
+    "@zip.js/zip.js": "^2.8.26",
+    "monkey-around": "^3.0.0"
   }
 }

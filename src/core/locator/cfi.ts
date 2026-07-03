@@ -1,5 +1,5 @@
 /**
- * CFI percent-encoding and `epubcfi( … )` wrapper handling (spec §6.4).
+ * CFI percent-encoding and `epubcfi( … )` wrapper handling.
  *
  * A raw CFI contains characters that conflict with link and subpath parsing,
  * so the persisted value is the CFI *body* (no wrapper), percent-encoded.
@@ -8,8 +8,8 @@
  */
 
 /**
- * Characters that must be percent-encoded in a persisted CFI value.
- * Spec §6.4: "at least `% [ ] , & = # | ( ) :`".
+ * Characters that must be percent-encoded in a persisted CFI value:
+ * at least `% [ ] , & = # | ( ) :`.
  */
 const RESERVED = new Set(["%", "[", "]", ",", "&", "=", "#", "|", "(", ")", ":"]);
 
@@ -30,7 +30,7 @@ export function encodeCfi(cfi: string): string {
 /**
  * Decode a percent-encoded CFI value back to the raw body.
  * Returns null when the input is not valid percent-encoding (a malformed
- * link must be skippable, never an exception — FR-5.5).
+ * link must be skippable, never an exception).
  */
 export function decodeCfi(encoded: string): string | null {
   try {

@@ -1,0 +1,5 @@
+[submodule "vendor/foliate-js"]
+	path = vendor/foliate-js
+	url = https://github.com/tkuramot/foliate-js.git
+	branch = maki
+	shallow = true

@@ -1,5 +1,5 @@
 /**
- * `PdfGeometry` — the pure math of PDF text-range highlighting (design §4.6):
+ * `PdfGeometry` — the pure math of PDF text-range highlighting:
  * `(text item boxes, begin, end) → merged rects`.
  *
  * Only *acquiring* the boxes and *injecting* the resulting rectangles into

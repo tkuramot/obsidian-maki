@@ -2,6 +2,9 @@
 main.js
 *.js.map
 
+# obsidian plugin runtime data
+data.json
+
 # deps
 node_modules/
 

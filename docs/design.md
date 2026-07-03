@@ -482,16 +482,26 @@ zip.js is a regular npm dependency (BSD-3-Clause), not vendored.
 ### 6.3 Constraints the adapter must honor
 
 - **Security / CSP.** EPUB sections are arbitrary HTML rendered in `<iframe>`s; Maki
-  applies a strict CSP that blocks scripts. Book scripts never run (spec §8).
+  applies a strict CSP that blocks scripts. Book scripts never run (spec §8). The
+  iframes are same-origin (blob URLs) with Obsidian's node-integrated renderer, so
+  this is enforced in layers: the fork's renderers accept a `sandbox` attribute and
+  the adapter sets `sandbox="allow-same-origin"` (no `allow-scripts`) on
+  `<foliate-view>` before `open()`; script resources are vetoed via the loader's
+  `load` event; and a `script-src 'none'` CSP meta is injected per (X)HTML section.
 - **Never inject DOM into section bodies.** foliate's CFI round-tripping assumes the
   content DOM is untouched; highlights are drawn in foliate's separate SVG overlayer,
   not in the text flow. Styling is injected only via `renderer.setStyles` and
   `::part(filter)` (for theme follow).
-- **Vendored, pinned.** foliate-js has no npm release and is not API-stable; it is
-  vendored at a pinned revision (MIT) and bundled, with the pinned commit SHA recorded
-  in `src/vendor/foliate-js/`. It is *not* dependency-free: EPUB reading requires
-  zip.js (supplied as the npm dependency `@zip.js/zip.js`, see §6.1). Its other
-  optional dependency, fflate, is only needed for KF8/MOBI fonts and is **not**
+- **Forked, pinned as a submodule.** foliate-js has no npm release and is not
+  API-stable; it is consumed from a patched fork
+  ([tkuramot/foliate-js](https://github.com/tkuramot/foliate-js), MIT), pinned as the
+  git submodule `vendor/foliate-js/`. The fork's `maki` branch carries two upstreamable
+  patches on top of upstream: the configurable iframe `sandbox` (above), and
+  `makeBook` split out of `view.js` so bundling the view does not drag in the unused
+  format implementations (MOBI/FB2/CBZ + foliate's own pdf.js). Updates rebase `maki`
+  onto upstream and bump the pin. foliate-js is *not* dependency-free: EPUB reading
+  requires zip.js (supplied as the npm dependency `@zip.js/zip.js`, see §6.1). Its
+  other optional dependency, fflate, is only needed for KF8/MOBI fonts and is **not**
   included while EPUB is the only foliate format Maki supports.
 
 ## 7. Future backend: native Obsidian EPUB
@@ -705,8 +715,9 @@ src/
     pdf/                      # PdfViewerProvider/Adapter, patches, PdfFileIO (opt.)
     epub/                     # EpubViewerProvider/Adapter, foliate host, vault loader
   obsidian/                   # commands, settings, ObsidianBacklinkIndex/NoteWriter, wiring
-  vendor/foliate-js/          # pinned, MIT
+  types/foliate-js/           # hand-written d.ts for the submodule (`foliate-js/*` specifier)
   main.ts                     # plugin entry: construct core, register providers
+vendor/foliate-js/            # git submodule: patched foliate-js fork, pinned (MIT)
 ```
 
 Differences from the earlier sketch, and why:
@@ -749,7 +760,8 @@ Differences from the earlier sketch, and why:
   CFIs can drift if the EPUB file itself changes. Mitigation: store the selected text
   alongside the locator and re-anchor by text match when resolution fails (open: how
   aggressively to re-anchor).
-- **foliate-js instability.** Pinned vendoring; a thin adapter limits blast radius.
+- **foliate-js instability.** Pinned fork submodule; a thin adapter limits blast
+  radius, and the fork's patches are kept upstreamable so they can eventually die.
 - **EPUB security.** Strict CSP is mandatory; revisit if Obsidian/Electron defaults
   change.
 - **Settings need a schema version from day one.** Palette, templates, and reading
@@ -771,7 +783,7 @@ rejections matter as much as the picks.
 | --- | --- | --- |
 | `monkey-around` | Safe, unpatchable-order-aware prototype patching; the de-facto community standard (obsidian-pdf-plus uses it). Hand-rolling would re-invent the multi-plugin unpatch-ordering problem. | hand-rolled patching |
 | `@zip.js/zip.js` | Required by foliate-js for Zip-based formats; the only zip library with random access over `File` objects. BSD-3-Clause. | — (foliate-js hard requirement) |
-| **vendored:** `foliate-js` (pinned SHA) | Actively maintained; character-offset-accurate CFI generation *and* resolution (the project's lifeline); SVG-overlayer annotation API matches the never-touch-section-DOM constraint (§6.3) exactly. No npm release, API unstable ⇒ vendored and pinned. | **epub.js** (effectively unmaintained; word-granularity CFIs break locator durability), **Readium** (full reading-system scale, poor fit for embedding + overlay control), self-built renderer (cost exceeds the plugin itself) |
+| **submodule:** `foliate-js` (patched fork, pinned) | Actively maintained; character-offset-accurate CFI generation *and* resolution (the project's lifeline); SVG-overlayer annotation API matches the never-touch-section-DOM constraint (§6.3) exactly. No npm release, API unstable ⇒ consumed from a fork ([tkuramot/foliate-js](https://github.com/tkuramot/foliate-js), `maki` branch: two upstreamable patches, see §6.3) pinned as the `vendor/foliate-js` git submodule. | **epub.js** (effectively unmaintained; word-granularity CFIs break locator durability), **Readium** (full reading-system scale, poor fit for embedding + overlay control), self-built renderer (cost exceeds the plugin itself) |
 | *deferred until FR-10:* `@cantoo/pdf-lib` | Maintained, API-compatible fork of pdf-lib. Not installed until the opt-in embed mode lands (§5.3). | **pdf-lib** upstream (unmaintained for years), **mupdf.js** (AGPL — incompatible), pdfkit/jsPDF (generation-oriented, unfit for annotating existing files) |
 
 ### Deliberately absent

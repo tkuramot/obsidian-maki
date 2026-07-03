@@ -1,49 +1,180 @@
 /**
- * Plugin entry: construct the pure core and (eventually) register the
- * backend providers (design §8, §13).
- *
- * The PDF and EPUB adapters are not implemented yet; this entry wires the
- * core so the plugin loads, and is the seam where `PdfViewerProvider` /
- * `EpubViewerProvider` will be registered.
+ * Plugin entry: construct the pure core, register the backend providers, and
+ * wire the integration layer. All decisions live in the
+ * core; this file only assembles and subscribes.
  */
 
-import { Plugin } from "obsidian";
+import { Plugin, type WorkspaceLeaf } from "obsidian";
+import { MakiEpubView, MAKI_EPUB_VIEW_TYPE } from "./backends/epub/epub-view";
+import { EpubViewerProvider } from "./backends/epub/epub-viewer-provider";
+import { PdfViewerProvider } from "./backends/pdf/pdf-viewer-provider";
 import {
   AnnotationService,
-  DEFAULT_ANNOTATION_SETTINGS,
+  type AnnotationSettings,
 } from "./core/annotation-service";
-import { ColorModel } from "./core/color-model";
+import { ColorModel, type Palette } from "./core/color-model";
+import type { DocumentViewer } from "./core/document-viewer";
 import { HighlightReconciler } from "./core/highlight-reconciler";
 import type { Codecs } from "./core/locator/codec";
 import { EpubLocatorCodec } from "./core/locator/epub-codec";
 import { PdfLocatorCodec } from "./core/locator/pdf-codec";
 import { TemplateEngine } from "./core/template-engine";
+import type { Color, HighlightId } from "./core/types";
+import { ViewerRegistry } from "./core/viewer-registry";
+import { ObsidianBacklinkIndex } from "./obsidian/backlink-index";
+import { registerCommands } from "./obsidian/commands";
+import { SourceSuggestModal } from "./obsidian/modals";
+import { ObsidianNoteWriter } from "./obsidian/note-writer";
+import { DEFAULT_SETTINGS, MakiSettingTab, type MakiSettings } from "./obsidian/settings";
+import { openNoteAt, ViewerManager } from "./obsidian/viewer-manager";
+
+const FALLBACK_COLOR: Color = { name: "yellow", rgb: [255, 208, 0] };
 
 export default class MakiPlugin extends Plugin {
+  // Narrows the base class's `settings?: unknown` (Obsidian ≥1.13).
+  declare settings: MakiSettings;
+
   private readonly codecs: Codecs = { pdf: PdfLocatorCodec, epub: EpubLocatorCodec };
-  private readonly colors = new ColorModel();
+  /**
+   * The one palette object handed to `ColorModel`. Settings changes are
+   * synced *into* it (in place), so the core always sees the current palette
+   * without being rebuilt.
+   */
+  private readonly livePalette: Palette = {};
+  private colors!: ColorModel;
 
   annotations!: AnnotationService;
   reconciler!: HighlightReconciler;
+  viewers!: ViewerManager;
 
   override async onload(): Promise<void> {
-    const yellow = this.colors.fromName("yellow")!;
+    await this.loadSettings();
 
-    this.reconciler = new HighlightReconciler(this.codecs, this.colors, yellow);
+    this.colors = new ColorModel(this.livePalette);
+    this.reconciler = new HighlightReconciler(this.codecs, this.colors, this.defaultColor());
     this.annotations = new AnnotationService({
       codecs: this.codecs,
       templates: new TemplateEngine(),
       colors: this.colors,
-      notes: {
-        // Placeholder until ObsidianNoteWriter lands with the integration
-        // layer; clipboard copy is the one behavior available without it.
-        copyToClipboard: (text) => navigator.clipboard.writeText(text),
-        insertIntoTarget: async () => {},
-      },
-      settings: () => DEFAULT_ANNOTATION_SETTINGS,
+      notes: new ObsidianNoteWriter(this.app),
+      settings: () => this.annotationSettings(),
     });
 
-    // Next steps (not yet implemented): construct a ViewerRegistry and
-    // register PdfViewerProvider / EpubViewerProvider with it here.
+    const registry = new ViewerRegistry();
+    const providers = [
+      new PdfViewerProvider(),
+      new EpubViewerProvider({
+        prefs: () => this.settings.epub,
+        getPosition: (path) => this.settings.readingPositions[path],
+        setPosition: (path, cfi) => {
+          this.settings.readingPositions[path] = cfi;
+          void this.saveData(this.settings);
+        },
+      }),
+    ];
+    for (const provider of providers) {
+      this.register(registry.register(provider).dispose);
+      this.register(provider.setup(this).dispose);
+    }
+
+    const index = new ObsidianBacklinkIndex(this.app);
+    this.viewers = new ViewerManager(this.app, registry, this.reconciler, index, (viewer, id) =>
+      this.openHighlightSources(viewer, id),
+    );
+
+    this.registerEvent(this.app.workspace.on("layout-change", () => this.viewers.scan()));
+    this.registerEvent(this.app.workspace.on("file-open", () => this.viewers.scan()));
+    this.registerEvent(
+      this.app.workspace.on("active-leaf-change", (leaf: WorkspaceLeaf | null) => {
+        this.viewers.noteActiveLeaf(leaf);
+        this.viewers.scan();
+      }),
+    );
+    this.app.workspace.onLayoutReady(() => this.viewers.scan());
+
+    registerCommands(this);
+    this.addSettingTab(new MakiSettingTab(this));
+  }
+
+  override onunload(): void {
+    this.viewers.destroyAll();
+  }
+
+  // ---- settings --------------------------------------------------------------
+
+  async updateSettings(mutate: (settings: MakiSettings) => void): Promise<void> {
+    mutate(this.settings);
+    this.syncLivePalette();
+    await this.saveData(this.settings);
+    // Colors / templates may have changed: re-project notes onto open viewers
+    // and re-style open books.
+    this.viewers.refreshAll();
+    for (const leaf of this.app.workspace.getLeavesOfType(MAKI_EPUB_VIEW_TYPE)) {
+      if (leaf.view instanceof MakiEpubView) leaf.view.applyPreferences();
+    }
+  }
+
+  defaultColor(): Color {
+    const first = Object.keys(this.livePalette)[0];
+    return (first !== undefined ? this.colors?.fromName(first) : null) ?? FALLBACK_COLOR;
+  }
+
+  paletteColors(): Color[] {
+    return Object.keys(this.livePalette)
+      .map((name) => this.colors.fromName(name))
+      .filter((color): color is Color => color !== null);
+  }
+
+  private async loadSettings(): Promise<void> {
+    const stored: unknown = await this.loadData();
+    const raw = (stored ?? {}) as Partial<MakiSettings>;
+    // version currently has a single value (1); merging with the defaults is
+    // the whole migration. Future shape changes branch on `raw.version` here.
+    this.settings = {
+      ...DEFAULT_SETTINGS,
+      ...raw,
+      version: 1,
+      palette: { ...(raw.palette ?? DEFAULT_SETTINGS.palette) },
+      displayTemplates: { ...DEFAULT_SETTINGS.displayTemplates, ...raw.displayTemplates },
+      epub: { ...DEFAULT_SETTINGS.epub, ...raw.epub },
+      readingPositions: { ...(raw.readingPositions ?? {}) },
+    };
+    this.syncLivePalette();
+  }
+
+  private syncLivePalette(): void {
+    for (const key of Object.keys(this.livePalette)) {
+      if (!(key in this.settings.palette)) delete this.livePalette[key];
+    }
+    Object.assign(this.livePalette, this.settings.palette);
+  }
+
+  private annotationSettings(): AnnotationSettings {
+    const s = this.settings;
+    return {
+      snippetTemplate: s.snippetTemplate,
+      displayTemplates: { ...s.displayTemplates },
+      autoCopy: s.autoCopy,
+      autoPaste: s.autoPaste,
+      target:
+        s.targetNotePath !== ""
+          ? { kind: "note", path: s.targetNotePath }
+          : { kind: "active-note" },
+    };
+  }
+
+  // ---- navigation -------------------------------------------------------------
+
+  private openHighlightSources(viewer: DocumentViewer, id: HighlightId): void {
+    const highlight = this.reconciler.getHighlight(viewer, id);
+    if (!highlight || highlight.sources.length === 0) return;
+    if (highlight.sources.length === 1) {
+      void openNoteAt(this.app, highlight.sources[0]!);
+      return;
+    }
+    // several annotations target the passage — surface all of them.
+    new SourceSuggestModal(this.app, highlight.sources, (source) => {
+      void openNoteAt(this.app, source);
+    }).open();
   }
 }

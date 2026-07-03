@@ -3,7 +3,7 @@
  *
  * This file is deliberately NOT a catch-all: module-owned types co-locate with
  * their owner (e.g. `LocatorCodec` → `locator/codec.ts`, `DocumentMetadata` →
- * `document-viewer.ts`). See design.md §13.
+ * `document-viewer.ts`).
  */
 
 /** Identifies a rendering backend. Extensible: 'epub-native', 'mobi', … */
@@ -19,7 +19,8 @@ export interface DocumentRef {
 /**
  * A serializable address of a point or range within a document, stable across
  * re-rendering. The single concept the entire core manipulates; the on-disk
- * encoding is defined in specification.md §6.
+ * encoding is the persisted link-subpath contract handled by the `locator/`
+ * codecs.
  */
 export type Locator = PdfLocator | EpubLocator;
 
@@ -37,7 +38,7 @@ export type PdfTarget =
     }
   | {
       kind: "annotation";
-      /** An existing PDF annotation object id, e.g. "123R" (FR-10). */
+      /** An existing PDF annotation object id, e.g. "123R". */
       id: string;
     };
 
@@ -81,7 +82,7 @@ export interface Highlight {
   id: HighlightId;
   locator: Locator;
   color: Color;
-  /** Notes whose backlinks created it (merged per FR-5.6). */
+  /** Notes whose backlinks created it (duplicate targets merge into one). */
   sources: NoteRef[];
 }
 
@@ -99,7 +100,7 @@ export interface BacklinkEntry {
   source: NoteRef;
 }
 
-/** Where auto-pasted snippets go (FR-4.2 / FR-8.3). */
+/** Where auto-pasted snippets go. */
 export type TargetStrategy =
   | { kind: "active-note" }
   | { kind: "note"; path: string };

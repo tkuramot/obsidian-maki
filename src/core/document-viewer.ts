@@ -1,5 +1,5 @@
 /**
- * `DocumentViewer` — the rendering & interaction port (design.md §3.4).
+ * `DocumentViewer` — the rendering & interaction port.
  *
  * One open document = one `DocumentViewer`; it is all the core needs to drive
  * any backend. Deliberately absent: pages, iframes, CFIs, PDF.js objects, DOM
@@ -19,12 +19,12 @@ import type {
 /**
  * How precisely `reveal` reached its target. 'fallback' means the exact
  * passage no longer resolves and the nearest coarse position (page / section)
- * was used, so the integration layer can notify the user (FR-6.4).
+ * was used, so the integration layer can notify the user.
  */
 export type RevealOutcome = "exact" | "fallback" | "not-found";
 
 /**
- * Backend-supplied labels used for display templates (spec §6.6). All fields
+ * Backend-supplied labels used for display templates. All fields
  * are optional: each backend fills what it has.
  */
 export interface DocumentMetadata {
@@ -50,7 +50,7 @@ export interface DocumentViewer {
   readonly backend: BackendId;
   readonly ref: DocumentRef;
 
-  /** Navigate to a locator and briefly flash it (FR-6.1, FR-6.4). */
+  /** Navigate to a locator and briefly flash it. */
   reveal(target: Locator, opts?: { flash?: boolean }): Promise<RevealOutcome>;
 
   /** The current live user selection, as an abstract selection, or null. */
@@ -59,14 +59,14 @@ export interface DocumentViewer {
   onSelectionChange(cb: (sel: TextSelection | null) => void): Disposable;
 
   /**
-   * Draw / erase highlights (FR-5.2, FR-5.3). Idempotent by id: drawing an
+   * Draw / erase highlights. Idempotent by id: drawing an
    * existing id replaces it. Best-effort — a locator that decodes but no
    * longer resolves draws nothing and must not throw.
    */
   drawHighlight(h: Highlight): void;
   eraseHighlight(id: HighlightId): void;
   clearHighlights(): void;
-  /** Fires when the user clicks a drawn highlight (FR-6.2). */
+  /** Fires when the user clicks a drawn highlight. */
   onHighlightActivate(cb: (id: HighlightId) => void): Disposable;
 
   metadata(): DocumentMetadata;

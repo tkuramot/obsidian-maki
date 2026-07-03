@@ -1,6 +1,6 @@
 /**
- * `PdfLocatorCodec` — Locator ↔ subpath params for the PDF backend
- * (spec §6.3). The keys reuse Obsidian's native PDF subpath conventions so
+ * `PdfLocatorCodec` — Locator ↔ subpath params for the PDF backend.
+ * The keys reuse Obsidian's native PDF subpath conventions so
  * links stay interoperable with Obsidian itself and obsidian-pdf-plus.
  */
 

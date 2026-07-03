@@ -1,5 +1,5 @@
 /**
- * `ViewerProvider` — the acquisition port (design.md §3.5).
+ * `ViewerProvider` — the acquisition port.
  *
  * Backends differ most in *how a viewer comes to exist*: the PDF backend
  * patches an existing Obsidian view, the EPUB backend registers and mounts

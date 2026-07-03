@@ -1,6 +1,6 @@
 /**
  * `ColorModel` — palette name ↔ RGB mapping and parsing/serialization of the
- * `color` subpath value (`name` or `r,g,b`; spec §6.2, design §4.3).
+ * `color` subpath value (`name` or `r,g,b`).
  * The `Color` *type* is shared vocabulary and lives in `types.ts`.
  */
 
@@ -8,7 +8,7 @@ import type { Color } from "./types";
 
 export type Palette = Record<string, [number, number, number]>;
 
-/** Default palette (FR-8.1: user-configurable in settings). */
+/** Default palette (user-configurable in settings). */
 export const DEFAULT_PALETTE: Palette = {
   yellow: [255, 208, 0],
   red: [255, 86, 86],
@@ -34,8 +34,7 @@ export class ColorModel {
   /**
    * Parse a `color` subpath value: a palette name or `r,g,b` (three 0–255
    * ints). Returns null for anything else — callers fall back to a default
-   * rather than skipping the highlight (only *locators* gate rendering,
-   * FR-5.5).
+   * rather than skipping the highlight (only *locators* gate rendering).
    */
   parse(value: string): Color | null {
     const named = this.fromName(value);

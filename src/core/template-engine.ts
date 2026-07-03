@@ -1,8 +1,8 @@
 /**
- * `TemplateEngine` — pure `{{var}}` substitution (spec §6.6, design §4.2).
+ * `TemplateEngine` — pure `{{var}}` substitution.
  *
- * Deliberately minimal: no conditionals, no loops, no external engine
- * (design §15 "deliberately absent"). Dotted paths (`{{file.basename}}`)
+ * Deliberately minimal: no conditionals, no loops, no external engine.
+ * Dotted paths (`{{file.basename}}`)
  * are supported; unknown or nullish variables expand to the empty string.
  */
 

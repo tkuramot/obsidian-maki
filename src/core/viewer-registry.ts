@@ -1,6 +1,6 @@
 /**
  * `ViewerRegistry` — maps a `DocumentRef` to the `ViewerProvider` that can
- * handle it (design §3.5). Adding a backend = registering one provider.
+ * handle it. Adding a backend = registering one provider.
  */
 
 import type { Disposable, DocumentRef } from "./types";

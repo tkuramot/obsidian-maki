@@ -1,6 +1,6 @@
 /**
- * `EpubLocatorCodec` — Locator ↔ subpath params for the EPUB backend
- * (spec §6.4). The persisted value is the CFI body, unwrapped and
+ * `EpubLocatorCodec` — Locator ↔ subpath params for the EPUB backend.
+ * The persisted value is the CFI body, unwrapped and
  * percent-encoded; the in-memory `EpubLocator.cfi` is unwrapped and decoded.
  */
 

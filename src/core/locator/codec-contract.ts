@@ -1,5 +1,5 @@
 /**
- * Shared contract suite for the `LocatorCodec` type (design §11): every codec
+ * Shared contract suite for the `LocatorCodec` type: every codec
  * value must satisfy the same round-trip property over the persisted format,
  * `decode(encode(x)) === x`. Imported by each codec's test file — this file
  * itself is a helper, not a test.

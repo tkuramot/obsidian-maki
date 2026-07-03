@@ -318,8 +318,8 @@ backend-specific labels — `page`, `pageLabel`, `pageCount` (PDF); `chapter`,
 - **Locator stability.** PDF text-item indices can drift if the PDF.js text
   segmentation changes; EPUB CFIs can drift if the book file itself changes. The
   selected text may be stored alongside the locator to help re-anchor (see design).
-- **foliate-js is not API-stable** and ships no npm release; it is vendored at a pinned
-  revision.
+- **foliate-js is not API-stable** and ships no npm release; it is consumed from a
+  patched fork pinned as a git submodule (see [design.md](./design.md) §"EPUB backend").
 - **Platform.** Desktop is the primary target for the initial release. Obsidian Mobile
   is best-effort: the PDF view patches and iframe/CSP behavior differ in mobile
   WebViews and are unverified there. Features must detect an unsupported environment

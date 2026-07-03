@@ -12,7 +12,14 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      // Types for the foliate-js submodule: esbuild resolves `foliate-js/*`
+      // to vendor/foliate-js/* (alias in esbuild.config.mjs); tsc resolves it
+      // to the hand-written declarations.
+      "foliate-js/*": ["src/types/foliate-js/*"]
+    }
   },
   "include": ["src/**/*.ts", "test/**/*.ts"]
 }

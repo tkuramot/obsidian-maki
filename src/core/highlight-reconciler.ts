@@ -1,6 +1,6 @@
 /**
- * `HighlightReconciler` — keep a viewer's highlights in sync with the notes
- * (FR-5, design §4.5). Identical for both backends; the only backend-specific
+ * `HighlightReconciler` — keep a viewer's highlights in sync with the notes.
+ * Identical for both backends; the only backend-specific
  * step (decode subpath → locator) is delegated to the codec.
  *
  * The wiring (`BacklinkIndex.onChange → reconcile`) lives in the integration
@@ -17,11 +17,11 @@ import type { BacklinkEntry, Color, Highlight, HighlightId, NoteRef } from "./ty
 export interface ReconcileSummary {
   /** Highlights currently drawn for the viewer. */
   drawn: number;
-  /** Entries skipped because their locator could not be decoded (FR-5.5). */
+  /** Entries skipped because their locator could not be decoded. */
   skipped: number;
 }
 
-/** Deterministic entry order: note path, then line (FR-5.6). */
+/** Deterministic entry order: note path, then line. */
 function compareBySource(a: BacklinkEntry, b: BacklinkEntry): number {
   return (
     a.source.path.localeCompare(b.source.path) ||
@@ -65,12 +65,12 @@ export class HighlightReconciler {
     const desired = new Map<HighlightId, Highlight>();
     let skipped = 0;
 
-    // Sort a copy so "first entry in note-path order wins" (FR-5.6) holds
+    // Sort a copy so "first entry in note-path order wins" holds
     // regardless of the order the index produced.
     for (const entry of [...entries].sort(compareBySource)) {
       const locator = codec.decode(entry.subpath);
       if (!locator) {
-        skipped++; // undecodable ⇒ skip but count (FR-5.5)
+        skipped++; // undecodable ⇒ skip but count
         continue;
       }
       const id = highlightIdFor(locator, codec);
@@ -81,7 +81,7 @@ export class HighlightReconciler {
       const existing = desired.get(id);
       if (existing) {
         // Same locator ⇒ one highlight with merged sources; the first
-        // entry's color wins (FR-5.6).
+        // entry's color wins.
         if (!existing.sources.some((s) => sameSource(s, entry.source))) {
           existing.sources.push(entry.source);
         }
@@ -102,6 +102,14 @@ export class HighlightReconciler {
 
     this.current.set(viewer, desired);
     return { drawn: desired.size, skipped };
+  }
+
+  /**
+   * Look up a currently drawn highlight, e.g. to resolve a highlight click
+   * back to its source notes.
+   */
+  getHighlight(viewer: DocumentViewer, id: HighlightId): Highlight | null {
+    return this.current.get(viewer)?.get(id) ?? null;
   }
 
   /** Forget a closed viewer's state (called from the viewer's dispose path). */

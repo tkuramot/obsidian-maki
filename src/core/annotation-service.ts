@@ -1,6 +1,5 @@
 /**
- * `AnnotationService` — create an annotation from the current selection
- * (FR-3/FR-4, design §4.4).
+ * `AnnotationService` — create an annotation from the current selection.
  *
  * The only non-pure things it touches are `viewer.captureSelection()` (a
  * port) and the injected note writer — in tests both are structural fakes.
@@ -22,7 +21,7 @@ import type {
 /**
  * The shape of `ObsidianNoteWriter` (a concrete class in the integration
  * layer) that this service depends on. Declared here as a structural type —
- * injection, not a port (design §3.6).
+ * injection, not a port.
  */
 export interface NoteWriter {
   insertIntoTarget(text: string, target: TargetStrategy): Promise<void>;
@@ -30,7 +29,7 @@ export interface NoteWriter {
 }
 
 export interface AnnotationSettings {
-  /** Template of the whole block inserted into the note (spec §6.6). */
+  /** Template of the whole block inserted into the note. */
   snippetTemplate: string;
   /** Template of the link alias (the text after `|`), per backend. */
   displayTemplates: Record<BackendId, string>;
@@ -63,7 +62,7 @@ function basenameOf(path: string): string {
   return dot > 0 ? file.slice(0, dot) : file;
 }
 
-/** Assemble the template variables of spec §6.6 from selection + metadata. */
+/** Assemble the snippet template variables from selection + metadata. */
 function buildVariables(
   viewer: DocumentViewer,
   sel: TextSelection,

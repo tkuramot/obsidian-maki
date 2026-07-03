@@ -113,6 +113,19 @@ describe("HighlightReconciler", () => {
     expect(viewer.highlights.size).toBe(1);
   });
 
+  it("getHighlight resolves a drawn id to its highlight, per viewer (FR-6.2)", () => {
+    reconciler.reconcile(viewer, [entry(page3, { path: "a.md", line: 1 })]);
+    const id = "pdf:page=3&selection=4,0,5,20";
+    expect(reconciler.getHighlight(viewer, id)?.sources).toEqual([
+      { path: "a.md", line: 1 },
+    ]);
+    expect(reconciler.getHighlight(viewer, "pdf:page=9&selection=0,0,0,1")).toBeNull();
+    const other = new FakeDocumentViewer({ path: "other.pdf", backend: "pdf" });
+    expect(reconciler.getHighlight(other, id)).toBeNull();
+    reconciler.detach(viewer);
+    expect(reconciler.getHighlight(viewer, id)).toBeNull();
+  });
+
   it("detach forgets state so a reopened viewer redraws from scratch", () => {
     const entries = [entry(page3, { path: "a.md", line: 1 })];
     reconciler.reconcile(viewer, entries);

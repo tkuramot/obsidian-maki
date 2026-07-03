@@ -14,13 +14,19 @@ to EPUB.
 
 ## Project status
 
-**Core implemented; adapters pending.** The pure core (`src/core/`, incl. the
-`locator/` codec family) exists with full unit tests, plus the build/test tooling
-(`package.json`, `manifest.json`, esbuild, Vitest) and a minimal `src/main.ts` entry.
-**Not yet implemented:** the PDF and EPUB adapters (`src/backends/`), the Obsidian
-integration layer (`src/obsidian/` — `ObsidianBacklinkIndex`, `ObsidianNoteWriter`,
-commands, settings), and the vendored foliate-js. Follow the design docs as the spec
-when adding these.
+**All layers implemented; untested against a live Obsidian.** The pure core
+(`src/core/`, incl. the `locator/` codec family) has full unit tests. The PDF adapter
+(`src/backends/pdf/` — binds live view instances; no prototype patches yet), the EPUB
+adapter (`src/backends/epub/` — `maki-epub` view over foliate-js + `@zip.js/zip.js`),
+the Obsidian integration layer (`src/obsidian/` — `ObsidianBacklinkIndex`,
+`ObsidianNoteWriter`, `ViewerManager`, commands, settings) and the `src/main.ts`
+wiring all exist and build. foliate-js comes from the patched fork
+[tkuramot/foliate-js](https://github.com/tkuramot/foliate-js) (`maki` branch), pinned
+as the **git submodule `vendor/foliate-js/`** — see "Toolchain" for the wiring and
+update flow. **Not yet implemented:** in-viewer UI (toolbar palette, context menus —
+FR-9.2/9.3, needs the monkey-patch route), highlight hover previews (FR-7.2), PDF
+rectangular selection (FR-3.3), FR-10 (PDF embed), and manual verification in
+Obsidian itself.
 
 ## Read the docs first
 
@@ -40,7 +46,7 @@ read in this order:
 Maki is **ports and adapters (hexagonal) around a pure core**, with one hard rule:
 **dependencies point inward**. Three layers:
 
-- **Core** (`src/core/`, planned) — pure, framework-free, unit-tested. Holds *all real
+- **Core** (`src/core/`) — pure, framework-free, unit-tested. Holds *all real
   logic*, as a **flat** set of files (only `locator/` starts as a directory). Never
   imports `obsidian`, `pdfjs`, foliate-js, or touches the DOM. Key pieces:
   `AnnotationService` (create an annotation), `HighlightReconciler` (render notes as
@@ -50,7 +56,7 @@ Maki is **ports and adapters (hexagonal) around a pure core**, with one hard rul
   `DocumentRef`, …) lives in `src/core/types.ts` — limited to that shared vocabulary, not
   a catch-all; module-owned types co-locate with their owner. Files are placed by *owner*,
   not by "it's a type / a port" (design §13).
-- **Ports** (`src/core/document-viewer.ts`, `src/core/viewer-provider.ts`, planned) —
+- **Ports** (`src/core/document-viewer.ts`, `src/core/viewer-provider.ts`) —
   **only two** interface-only seams, one file each. These are the genuinely-polymorphic
   boundaries (PDF / EPUB / future native-EPUB). There is no `src/ports/` directory and no
   pooled `ports.ts` — placement is by *owner*, not by "it's a port" (see design §13).
@@ -59,7 +65,7 @@ Maki is **ports and adapters (hexagonal) around a pure core**, with one hard rul
   `ObsidianNoteWriter` are concrete classes injected into the core. They have exactly one
   implementation forever, so they earn no port. The core stays testable because it is
   *injected* (structural fakes), not because these are interfaces. See design §3.6 / §10.
-- **Adapters / integration** (`src/backends/`, `src/obsidian/`, planned) — *humble*:
+- **Adapters / integration** (`src/backends/`, `src/obsidian/`) — *humble*:
   thin, logic-free bindings to Obsidian, PDF.js, foliate-js, the DOM, the filesystem.
 
 The single most important abstraction is **`DocumentViewer`**: one open document = one
@@ -72,9 +78,10 @@ exposes no pages, iframes, CFIs, or DOM nodes — those leak only into adapters.
   inherently fragile across Obsidian versions — patches must version-guard and degrade
   gracefully.
 - **EPUB** is rendered by **foliate-js** in a plugin-owned `ItemView` (`maki-epub`),
-  because Obsidian has no native EPUB viewer. foliate-js is **vendored at a pinned
-  revision** (no npm release, not API-stable) under `src/vendor/foliate-js/`. It is not
-  dependency-free: EPUB reading requires `@zip.js/zip.js` (regular npm dependency).
+  because Obsidian has no native EPUB viewer. foliate-js (no npm release, not
+  API-stable) is consumed from a **patched fork pinned as a git submodule**
+  (`vendor/foliate-js/`, fork branch `maki`). It is not dependency-free: EPUB reading
+  requires `@zip.js/zip.js` (regular npm dependency).
 
 A future native-Obsidian-EPUB backend is planned to slot in behind the same ports
 without touching the core (design §7, §12).
@@ -99,9 +106,13 @@ These are easy to violate and expensive to get wrong:
   piece touches a framework, it belongs in an adapter and must be trivial (no logic).
   The "testability map" in design §10 is the authority on which side each concern lives.
 - **EPUB security:** EPUB sections are arbitrary HTML/JS rendered in iframes and MUST be
-  served under a strict CSP that blocks scripts. Never inject DOM into foliate section
-  bodies (it breaks CFI round-tripping) — draw highlights only in foliate's separate SVG
-  overlayer.
+  served under a strict CSP that blocks scripts. The section iframes are same-origin
+  with Obsidian's node-integrated renderer, so a running book script means RCE. The
+  fork's renderers take the sandbox from a `sandbox` attribute, and **`MakiEpubView`
+  must set `sandbox="allow-same-origin"` on `<foliate-view>` before `open()`** — the
+  upstream default keeps `allow-scripts`. `epub-security.ts` layers resource vetoes and
+  per-section CSP metas on top. Never inject DOM into foliate section bodies (it breaks
+  CFI round-tripping) — draw highlights only in foliate's separate SVG overlayer.
 
 ## Toolchain
 
@@ -119,10 +130,20 @@ Scripts:
 
 Tests are colocated with their source (`foo.ts` → `foo.test.ts`); the shared codec
 contract suite lives in `src/core/locator/codec-contract.ts` and the recording
-`DocumentViewer` fake in `src/core/fake-document-viewer.ts`.
+`DocumentViewer` fake in `test/fake-document-viewer.ts`.
+
+**foliate-js submodule.** After cloning, run `git submodule update --init`. The
+submodule `vendor/foliate-js/` tracks the fork's `maki` branch (upstream + two
+`[maki]` patches: attribute-configurable iframe sandbox, `makeBook` split out of
+`view.js`). Source imports use the `foliate-js/*` specifier: esbuild `alias` resolves
+it to the submodule, tsconfig `paths` resolves it to the hand-written declarations in
+`src/types/foliate-js/` (check those for drift on every bump — a mismatch
+type-checks fine and fails at runtime). Update flow: rebase the fork's `maki` onto
+upstream → tag → bump the submodule pin → `pnpm test && pnpm build` → open an EPUB
+manually.
 
 The full dependency policy — what is depended on, what was rejected and why, and what
 is deliberately absent (no template engine, no CFI parser, no UI framework, no bundled
 PDF.js) — is design §15. Runtime dependencies are intentionally minimal:
-`monkey-around` + `@zip.js/zip.js` + vendored foliate-js; `@cantoo/pdf-lib` (not
+`monkey-around` + `@zip.js/zip.js` + the foliate-js submodule; `@cantoo/pdf-lib` (not
 upstream pdf-lib, which is unmaintained) is deferred until FR-10.

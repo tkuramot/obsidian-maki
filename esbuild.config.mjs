@@ -6,6 +6,11 @@ const production = process.argv[2] === "production";
 const context = await esbuild.context({
   entryPoints: ["src/main.ts"],
   bundle: true,
+  alias: {
+    // foliate-js lives in a git submodule (tkuramot's patched fork). tsc
+    // resolves the same specifier to src/types/foliate-js/ (tsconfig paths).
+    "foliate-js": "./vendor/foliate-js",
+  },
   external: [
     "obsidian",
     "electron",

@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { DocumentRef, PdfLocator } from "../types";
 import { EpubLocatorCodec } from "./epub-codec";
-import { buildLink, highlightIdFor, parseSubpath, serializeSubpath } from "./link";
+import {
+  buildLink,
+  highlightIdFor,
+  parseSubpath,
+  removeAnnotationLink,
+  serializeSubpath,
+} from "./link";
 import { PdfLocatorCodec } from "./pdf-codec";
 
 const paper: DocumentRef = { path: "paper.pdf", backend: "pdf" };
@@ -91,5 +97,38 @@ describe("highlightIdFor", () => {
     expect(
       highlightIdFor({ backend: "epub", cfi: "/6/4!/2:0" }, EpubLocatorCodec),
     ).toMatch(/^epub:/);
+  });
+});
+
+describe("removeAnnotationLink (FR-7.3)", () => {
+  const subpath = parseSubpath("page=3&selection=4,0,5,20&color=yellow");
+
+  it("removes the link at the hinted line, keeping surrounding text", () => {
+    const content = [
+      "# Notes",
+      "> [!quote] [[paper.pdf#page=3&selection=4,0,5,20&color=yellow|p.3]]",
+      "> quoted text",
+    ].join("\n");
+    expect(removeAnnotationLink(content, subpath, 1)).toBe(
+      ["# Notes", "> [!quote] ", "> quoted text"].join("\n"),
+    );
+  });
+
+  it("matches key-order-insensitively and falls back to a full scan", () => {
+    const content = "see [[paper.pdf#color=yellow&page=3&selection=4,0,5,20]] here";
+    expect(removeAnnotationLink(content, subpath, 99)).toBe("see  here");
+  });
+
+  it("does not remove links with a different subpath", () => {
+    const content = "[[paper.pdf#page=4&selection=4,0,5,20&color=yellow]]";
+    expect(removeAnnotationLink(content, subpath)).toBeNull();
+  });
+
+  it("removes embeds and aliased links, only the matching one", () => {
+    const content =
+      "![[paper.pdf#page=3&selection=4,0,5,20&color=yellow|alias]] [[paper.pdf#page=9&rect=1,2,3,4]]";
+    expect(removeAnnotationLink(content, subpath)).toBe(
+      " [[paper.pdf#page=9&rect=1,2,3,4]]",
+    );
   });
 });
