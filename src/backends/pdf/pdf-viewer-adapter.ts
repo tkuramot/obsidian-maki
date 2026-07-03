@@ -24,6 +24,7 @@ import type {
   Locator,
   TextSelection,
 } from "../../core/types";
+import { snapToTextEndpoints } from "../snap-range";
 import type {
   PdfJsPageView,
   PdfJsTextItem,
@@ -33,6 +34,17 @@ import type {
 
 const OVERLAY_CLASS = "maki-pdf-annotation-layer";
 const HIGHLIGHT_CLASS = "maki-highlight";
+
+/**
+ * The page's text-item spans, across pdf.js versions: pdf.js ≥4 nests the
+ * real `TextLayer` (which owns `textDivs`) inside the page view's
+ * `textLayer` builder; older versions put `textDivs` on the builder itself.
+ */
+function textDivsOf(pageView: PdfJsPageView | null): HTMLElement[] | null {
+  const builder = pageView?.textLayer;
+  if (!builder) return null;
+  return (builder.textLayer ?? builder).textDivs ?? null;
+}
 
 /** getTextContent items → the pure-math boxes. */
 function toItemBoxes(items: readonly PdfJsTextItem[]): TextItemBox[] {
@@ -50,6 +62,12 @@ export class PdfViewerAdapter implements DocumentViewer {
   private readonly activateCbs = new Set<(id: HighlightId) => void>();
   private readonly selectionCbs = new Set<(sel: TextSelection | null) => void>();
   private readonly textItemCache = new Map<number, Promise<TextItemBox[]>>();
+  /**
+   * The last live selection, kept when another pane steals the (window-wide)
+   * DOM selection — e.g. focusing the note to paste into. Cleared only by a
+   * pointerdown on a page, i.e. the user acting inside the document again.
+   */
+  private remembered: TextSelection | null = null;
   private pageLabels: string[] | null = null;
   private readonly disposers: Array<() => void> = [];
   private destroyed = false;
@@ -76,14 +94,31 @@ export class PdfViewerAdapter implements DocumentViewer {
       this.disposers.push(() => eventBus.off("pagerendered", onPageRendered));
     }
 
-    const doc = this.containerEl()?.ownerDocument;
-    if (doc) {
+    const container = this.containerEl();
+    const doc = container?.ownerDocument;
+    if (container && doc) {
+      // A vanished DOM selection is ambiguous: cleared by the user acting in
+      // the viewer, or stolen by another pane (the window shares one
+      // selection). Only pointerdown on a page counts as intent; everything
+      // else keeps `remembered` alive so annotate still works after the user
+      // focuses the note they want to paste into.
       const onSelectionChange = (): void => {
-        const sel = this.captureSelection();
-        for (const cb of this.selectionCbs) cb(sel);
+        const live = this.liveSelection();
+        if (!live) return;
+        this.remembered = live;
+        for (const cb of this.selectionCbs) cb(live);
+      };
+      const onPointerDown = (event: Event): void => {
+        if (!(event.target instanceof Element) || !event.target.closest(".page")) return;
+        this.remembered = null;
+        for (const cb of this.selectionCbs) cb(null);
       };
       doc.addEventListener("selectionchange", onSelectionChange);
-      this.disposers.push(() => doc.removeEventListener("selectionchange", onSelectionChange));
+      container.addEventListener("pointerdown", onPointerDown);
+      this.disposers.push(() => {
+        doc.removeEventListener("selectionchange", onSelectionChange);
+        container.removeEventListener("pointerdown", onPointerDown);
+      });
     }
   }
 
@@ -128,6 +163,10 @@ export class PdfViewerAdapter implements DocumentViewer {
   // ---- selection -----------------------------------------------------------
 
   captureSelection(): TextSelection | null {
+    return this.liveSelection() ?? this.remembered;
+  }
+
+  private liveSelection(): TextSelection | null {
     const container = this.containerEl();
     const doc = container?.ownerDocument;
     const sel = doc?.defaultView?.getSelection() ?? null;
@@ -136,25 +175,76 @@ export class PdfViewerAdapter implements DocumentViewer {
     const range = sel.getRangeAt(0);
     if (!container.contains(range.commonAncestorContainer)) return null;
 
+    // Rejections below console.debug their reason: a real in-viewer
+    // selection being rejected is the signal that the private PDF.js
+    // internals drifted (enable Verbose in the console to see them).
     const startPage = this.pageElOf(range.startContainer);
     const endPage = this.pageElOf(range.endContainer);
     // Cross-page selections have no single-page locator; skip.
-    if (!startPage || startPage !== endPage) return null;
+    if (!startPage || startPage !== endPage) {
+      console.debug("Maki[pdf]: selection rejected —", startPage ? "spans pages" : "no .page ancestor");
+      return null;
+    }
 
     const pageNumber = Number(startPage.getAttribute("data-page-number"));
     if (!Number.isInteger(pageNumber) || pageNumber < 1) return null;
-    const textDivs = this.pageView(pageNumber)?.textLayer?.textDivs;
-    if (!textDivs || textDivs.length === 0) return null;
 
-    const begin = this.endpointOf(range.startContainer, range.startOffset, textDivs, doc!);
-    const end = this.endpointOf(range.endContainer, range.endOffset, textDivs, doc!);
-    if (!begin || !end) return null;
-    if (begin[0] > end[0] || (begin[0] === end[0] && begin[1] >= end[1])) return null;
-
+    // Dragging past a line/block end puts an endpoint on an element node;
+    // snap to the outermost text the range covers before resolving items.
+    const snapped = snapToTextEndpoints(range);
+    if (!snapped) {
+      console.debug("Maki[pdf]: selection rejected — no text inside the range");
+      return null;
+    }
+    const endpoints =
+      this.nativeEndpoints(startPage) ?? this.domEndpoints(snapped, pageNumber, doc!);
+    if (!endpoints) return null;
+    const [begin, end] = endpoints;
     return {
       locator: { backend: "pdf", page: pageNumber, target: { kind: "text", begin, end } },
       text: sel.toString(),
     };
+  }
+
+  /**
+   * Endpoints via Obsidian's own selection helper, when present — it tracks
+   * pdf.js's text-layer DOM across versions, and its item indices are the
+   * same native `selection=` convention the locator format reuses (spec §6).
+   */
+  private nativeEndpoints(
+    pageEl: HTMLElement,
+  ): [begin: [number, number], end: [number, number]] | null {
+    if (typeof this.child.getTextSelectionRangeStr !== "function") return null;
+    const str = this.child.getTextSelectionRangeStr(pageEl);
+    const parts = str ? str.split(",").map((part) => Number(part.trim())) : [];
+    if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0)) return null;
+    const [bi, bo, ei, eo] = parts as [number, number, number, number];
+    if (bi > ei || (bi === ei && bo >= eo)) return null;
+    return [
+      [bi, bo],
+      [ei, eo],
+    ];
+  }
+
+  /** Fallback for older internals: resolve endpoints by walking `textDivs`. */
+  private domEndpoints(
+    range: Range,
+    pageNumber: number,
+    doc: Document,
+  ): [begin: [number, number], end: [number, number]] | null {
+    const textDivs = textDivsOf(this.pageView(pageNumber));
+    if (!textDivs || textDivs.length === 0) {
+      console.debug("Maki[pdf]: selection rejected — no textDivs on page view (internals drift?)");
+      return null;
+    }
+    const begin = this.endpointOf(range.startContainer, range.startOffset, textDivs, doc);
+    const end = this.endpointOf(range.endContainer, range.endOffset, textDivs, doc);
+    if (!begin || !end) {
+      console.debug("Maki[pdf]: selection rejected — endpoint not in textDivs");
+      return null;
+    }
+    if (begin[0] > end[0] || (begin[0] === end[0] && begin[1] >= end[1])) return null;
+    return [begin, end];
   }
 
   onSelectionChange(cb: (sel: TextSelection | null) => void): Disposable {

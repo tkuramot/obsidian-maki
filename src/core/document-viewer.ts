@@ -53,7 +53,12 @@ export interface DocumentViewer {
   /** Navigate to a locator and briefly flash it. */
   reveal(target: Locator, opts?: { flash?: boolean }): Promise<RevealOutcome>;
 
-  /** The current live user selection, as an abstract selection, or null. */
+  /**
+   * The current user selection, as an abstract selection, or null. It must
+   * survive the DOM selection being taken over by another pane (e.g. the
+   * user focusing the note they'll paste into): it stays current until the
+   * user clears it inside the viewer or replaces it.
+   */
   captureSelection(): TextSelection | null;
   /** Fires whenever the live selection changes (for auto-copy, palette state). */
   onSelectionChange(cb: (sel: TextSelection | null) => void): Disposable;

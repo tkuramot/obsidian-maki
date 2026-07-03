@@ -27,6 +27,12 @@ export interface PdfJsTextLayer {
   div?: HTMLElement;
   /** One rendered span per text-content item, aligned by index. */
   textDivs?: HTMLElement[];
+  /**
+   * pdf.js ≥4 moved the render state into a nested `TextLayer`: the page
+   * view's `textLayer` is then a `TextLayerBuilder` whose `textDivs` live
+   * here instead (obsidian-pdf-plus shims the same split).
+   */
+  textLayer?: PdfJsTextLayer | null;
 }
 
 export interface PdfJsPageView {
@@ -76,6 +82,12 @@ export interface PdfViewerChildLike {
   pdfViewer?: ObsidianViewerLike | null;
   /** Navigate to an Obsidian PDF subpath (`#page=…&selection=…`). */
   applySubpath?(subpath: string): unknown;
+  /**
+   * Obsidian's own DOM-selection → `beginIdx,beginOff,endIdx,endOff` helper
+   * (it powers the native "Copy link to selection"). Preferred over walking
+   * the text layer ourselves: it tracks pdf.js's DOM across versions.
+   */
+  getTextSelectionRangeStr?(pageEl: HTMLElement): string | null;
 }
 
 /** PDFViewerComponent — `PDFView.viewer`; thenable once the child exists. */

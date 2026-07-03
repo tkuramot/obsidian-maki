@@ -30,44 +30,11 @@ import type {
   FoliateShowAnnotationDetail,
   View as FoliateView,
 } from "foliate-js/view.js";
+import { snapToTextEndpoints } from "../snap-range";
 
 const HIGHLIGHT_OPACITY = 0.5;
 const FLASH_VALUE_COLOR = "rgba(255, 208, 0, 0.5)";
 const FLASH_MS = 1200;
-
-/**
- * Snap element-node range endpoints to text positions. Browsers often report
- * a selection boundary as (element, child index) — e.g. when dragging to the
- * end of a block — but foliate's `CFI.fromRange` drops offsets on element
- * steps, turning such a boundary into an inverted range CFI (start sorting
- * after end) that resolves to a collapsed range and draws nothing.
- * Returns null when the range contains no text to snap to.
- */
-function snapToTextEndpoints(range: Range): Range | null {
-  const startsInText = range.startContainer.nodeType === Node.TEXT_NODE;
-  const endsInText = range.endContainer.nodeType === Node.TEXT_NODE;
-  if (startsInText && endsInText) return range;
-
-  const doc = range.commonAncestorContainer.ownerDocument;
-  if (!doc) return null;
-  const walker = doc.createTreeWalker(range.commonAncestorContainer, NodeFilter.SHOW_TEXT);
-  let first: Text | null = null;
-  let last: Text | null = null;
-  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    const text = node as Text;
-    if (text.length === 0 || !range.intersectsNode(text)) continue;
-    first ??= text;
-    last = text;
-  }
-  if (!first || !last) return null;
-
-  const snapped = range.cloneRange();
-  // A text node never straddles an element-node boundary, so an intersecting
-  // one lies entirely inside the range on that side: snap to its outer edge.
-  if (!startsInText) snapped.setStart(first, 0);
-  if (!endsInText) snapped.setEnd(last, last.length);
-  return snapped.collapsed ? null : snapped;
-}
 
 /**
  * A range CFI whose start sorts after its end can only resolve to a collapsed
@@ -91,6 +58,12 @@ export class EpubViewerAdapter implements DocumentViewer {
   private readonly activateCbs = new Set<(id: HighlightId) => void>();
   private readonly selectionCbs = new Set<(sel: TextSelection | null) => void>();
   private readonly aborter = new AbortController();
+  /**
+   * The last live selection. Section selections vanish without a
+   * `selectionchange` (page turn unloads the section document); a collapse
+   * *inside* a section does fire one and clears this — user intent.
+   */
+  private remembered: TextSelection | null = null;
 
   constructor(
     readonly ref: DocumentRef,
@@ -136,7 +109,8 @@ export class EpubViewerAdapter implements DocumentViewer {
       (event) => {
         const { doc } = (event as CustomEvent<FoliateLoadDetail>).detail;
         doc.addEventListener("selectionchange", () => {
-          const sel = this.captureSelection();
+          const sel = this.liveSelection();
+          this.remembered = sel;
           for (const cb of this.selectionCbs) cb(sel);
         });
       },
@@ -185,6 +159,12 @@ export class EpubViewerAdapter implements DocumentViewer {
   // ---- selection -----------------------------------------------------------
 
   captureSelection(): TextSelection | null {
+    return this.liveSelection() ?? this.remembered;
+  }
+
+  private liveSelection(): TextSelection | null {
+    // Rejections below console.debug their reason: a real selection being
+    // rejected signals foliate/type drift (enable Verbose to see them).
     for (const { doc, index } of this.view.renderer?.getContents() ?? []) {
       const sel = doc.defaultView?.getSelection();
       if (!sel || sel.isCollapsed || sel.rangeCount === 0) continue;
@@ -192,15 +172,23 @@ export class EpubViewerAdapter implements DocumentViewer {
       const text = sel.toString();
       if (text === "") continue;
       const snapped = snapToTextEndpoints(range);
-      if (!snapped) continue;
+      if (!snapped) {
+        console.debug("Maki[epub]: selection rejected — no text to snap to");
+        continue;
+      }
       try {
         const cfi = this.view.getCFI(index, snapped);
-        if (!cfi || isInvertedRangeCfi(cfi)) continue;
+        if (!cfi || isInvertedRangeCfi(cfi)) {
+          console.debug("Maki[epub]: selection rejected —", cfi ? `inverted CFI ${cfi}` : "empty CFI");
+          continue;
+        }
         return {
           locator: { backend: "epub", cfi: unwrapCfi(cfi) },
           text,
         };
-      } catch {
+      } catch (error) {
+        // A throwing getCFI is fork/type drift — never swallow it silently.
+        console.warn("Maki: EPUB selection → CFI failed", error);
         continue;
       }
     }
