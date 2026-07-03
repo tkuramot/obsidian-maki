@@ -60,7 +60,7 @@ export interface DocumentViewer {
    * user clears it inside the viewer or replaces it.
    */
   captureSelection(): TextSelection | null;
-  /** Fires whenever the live selection changes (for auto-copy, palette state). */
+  /** Fires whenever the live selection changes (for annotate-on-selection, palette state). */
   onSelectionChange(cb: (sel: TextSelection | null) => void): Disposable;
 
   /**

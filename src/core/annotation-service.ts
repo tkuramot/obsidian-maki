@@ -28,13 +28,19 @@ export interface NoteWriter {
   copyToClipboard(text: string): Promise<void>;
 }
 
+/**
+ * Where the snippet goes. The verb of the invoking command *is* the
+ * destination ("Copy …" / "Insert …"), so this is a required argument,
+ * not a settings-controlled side effect.
+ */
+export type AnnotationDestination = "clipboard" | "note";
+
 export interface AnnotationSettings {
   /** Template of the whole block inserted into the note. */
   snippetTemplate: string;
   /** Template of the link alias (the text after `|`), per backend. */
   displayTemplates: Record<BackendId, string>;
-  autoCopy: boolean;
-  autoPaste: boolean;
+  /** Where `"note"`-destined snippets are inserted. */
   target: TargetStrategy;
 }
 
@@ -44,8 +50,6 @@ export const DEFAULT_ANNOTATION_SETTINGS: AnnotationSettings = {
     pdf: "{{file.basename}}, p.{{page}}",
     epub: "{{file.basename}}, {{chapter}}",
   },
-  autoCopy: true,
-  autoPaste: false,
   target: { kind: "active-note" },
 };
 
@@ -105,12 +109,13 @@ export class AnnotationService {
   ) {}
 
   /**
-   * Turn the viewer's current selection into an annotation snippet, then
-   * copy / auto-paste it per settings. Returns null when nothing is selected.
+   * Turn the viewer's current selection into an annotation snippet and
+   * deliver it to `destination`. Returns null when nothing is selected.
    */
   async annotate(
     viewer: DocumentViewer,
     color: Color,
+    destination: AnnotationDestination,
     comment?: string,
   ): Promise<AnnotateResult | null> {
     const sel = viewer.captureSelection();
@@ -134,8 +139,8 @@ export class AnnotationService {
       display,
     });
 
-    if (s.autoCopy) await notes.copyToClipboard(snippet);
-    if (s.autoPaste) await notes.insertIntoTarget(snippet, s.target);
+    if (destination === "clipboard") await notes.copyToClipboard(snippet);
+    else await notes.insertIntoTarget(snippet, s.target);
 
     return { link: linkWithDisplay, snippet };
   }

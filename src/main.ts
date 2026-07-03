@@ -86,11 +86,19 @@ export default class MakiPlugin extends Plugin {
       this.register(provider.setup(this).dispose);
     }
 
-    // Auto-copy mode (FR-8.3): a settled selection acts as "Copy link to
-    // selection". Quiet on unusable selections — they are not user intent.
+    // Annotate-on-selection mode (FR-8.3): a settled selection acts as the
+    // copy or insert command per the `onSelect` setting. Quiet on unusable
+    // selections — they are not user intent.
     const autoAnnotator = new SelectionAutoAnnotator({
-      enabled: () => this.settings.autoCopyOnSelect,
-      annotate: (viewer) => void annotateViewer(this, viewer, this.selectedColor(), { quiet: true }),
+      enabled: () => this.settings.onSelect !== "off",
+      annotate: (viewer) =>
+        void annotateViewer(
+          this,
+          viewer,
+          this.selectedColor(),
+          this.settings.onSelect === "insert" ? "note" : "clipboard",
+          { quiet: true },
+        ),
     });
 
     const index = new ObsidianBacklinkIndex(this.app);
@@ -212,8 +220,6 @@ export default class MakiPlugin extends Plugin {
     return {
       snippetTemplate: s.snippetTemplate,
       displayTemplates: { ...s.displayTemplates },
-      autoCopy: s.autoCopy,
-      autoPaste: s.autoPaste,
       target:
         s.targetNotePath !== ""
           ? { kind: "note", path: s.targetNotePath }

@@ -100,7 +100,7 @@ export interface BacklinkEntry {
   source: NoteRef;
 }
 
-/** Where auto-pasted snippets go. */
+/** Where note-destined snippets are inserted. */
 export type TargetStrategy =
   | { kind: "active-note" }
   | { kind: "note"; path: string };

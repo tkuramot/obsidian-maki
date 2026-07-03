@@ -107,8 +107,9 @@ workflow, generalized so that PDF and EPUB behave the same way.
 ### FR-4 — Annotate (write back to markdown)
 
 - **FR-4.1** Generate a markdown snippet for the current selection that embeds a link
-  to its locator (§6), and copy it to the clipboard.
-- **FR-4.2** Optionally **auto-paste** the snippet into a target note without leaving
+  to its locator (§6). Each annotate action has exactly one destination, named by the
+  command's verb: **copy** to the clipboard, or **insert** into a target note.
+- **FR-4.2** **Insert** places the snippet into the target note without leaving
   the preview (the target is the last-edited / last-active note, configurable).
 - **FR-4.3** Format the inserted snippet with a user-configurable **template** that
   can include the link, the quoted text, the color, page/chapter labels, and a
@@ -159,25 +160,26 @@ workflow, generalized so that PDF and EPUB behave the same way.
 
 - **FR-8.1** A configurable color palette (names → colors).
 - **FR-8.2** Configurable snippet and link-display templates (§6.6).
-- **FR-8.3** Auto-paste / auto-copy / auto-focus toggles and target-selection
-  strategy, plus an **auto-copy-on-selection mode**: when enabled, a text
-  selection that settles in the preview acts as *Copy link to selection*
-  (with the toolbar color), no command needed.
+- **FR-8.3** Target-selection strategy for insert, plus an
+  **annotate-on-selection mode** (`onSelect`: *off* / *copy* / *insert*): when not
+  off, a text selection that settles in the preview acts as the corresponding
+  annotate command (with the toolbar color), no command needed. There are no
+  per-effect toggles — the destination of a command is fixed by its verb (FR-4.1).
 - **FR-8.4** EPUB rendering preferences (columns, margins, font size, line height,
   theme follow).
 
 ### FR-9 — Commands and UI
 
-- **FR-9.1** Commands: *Copy link to selection*, *Copy link to selection with
-  comment*, *Start rectangular selection* (PDF), *Toggle auto-paste*, *Toggle
-  copy link to clipboard* (the `autoCopy` setting), *Toggle copy link on
-  selection* (FR-8.3's auto-copy mode).
+- **FR-9.1** Commands: *Copy link to selection* and *Insert link into note*
+  (each also as a *(pick color)* and a *with comment* variant), *Start rectangular
+  selection* (PDF), and *Cycle what selecting text does* (FR-8.3's `onSelect`
+  mode). Command names state the destination; nothing is toggled implicitly.
 - **FR-9.2** A color picker in the preview toolbar (PDF and EPUB alike). The picked
   color is remembered (persisted in settings) and used by every subsequent
-  copy/auto-paste annotation action until picked again.
+  copy/insert annotation action until picked again.
 - **FR-9.3** A right-click context menu in the preview offering the same actions.
 - **FR-9.4** Every action whose effect is not visible in place (copy to clipboard,
-  auto-paste into a note in another pane, mode toggles) confirms itself with an
+  insert into a note in another pane, mode changes) confirms itself with an
   Obsidian notice (e.g. "Link copied") — the user should never wonder whether the
   action fired.
 
@@ -292,9 +294,10 @@ backend-specific labels — `page`, `pageLabel`, `pageCount` (PDF); `chapter`,
 ### 7.1 Annotate a passage
 
 1. Open the document; select a passage.
-2. Click a palette color (or run *Copy link to selection*).
-3. Maki builds the locator, fills the snippet template, and copies it (and, if
-   auto-paste is on, inserts it into the target note).
+2. Click a palette color (or run *Copy link to selection* / *Insert link into
+   note*).
+3. Maki builds the locator, fills the snippet template, and delivers it to the
+   command's destination — the clipboard, or the target note.
 4. The user writes a comment beside the quoted text. The highlight appears in the
    preview immediately (FR-5.3).
 

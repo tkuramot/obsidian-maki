@@ -25,6 +25,9 @@ export interface EpubPreferences {
   followTheme: boolean;
 }
 
+/** What a settled text selection in the preview does, no command needed. */
+export type OnSelectAction = "off" | "copy" | "insert";
+
 export interface MakiSettings {
   /** Settings schema version — bump on breaking shape changes. */
   version: 1;
@@ -33,11 +36,9 @@ export interface MakiSettings {
   selectedColor: string;
   snippetTemplate: string;
   displayTemplates: { pdf: string; epub: string };
-  autoCopy: boolean;
-  autoPaste: boolean;
-  /** Auto-copy mode: a settled text selection runs "Copy link to selection". */
-  autoCopyOnSelect: boolean;
-  /** Auto-paste target: empty = last active markdown note. */
+  /** Annotate-on-selection mode: what selecting text does by itself. */
+  onSelect: OnSelectAction;
+  /** Insert target: empty = last active markdown note. */
   targetNotePath: string;
   epub: EpubPreferences;
   /** Last reading position per document path (EPUB: wrapped CFI). */
@@ -50,9 +51,7 @@ export const DEFAULT_SETTINGS: MakiSettings = {
   selectedColor: "",
   snippetTemplate: DEFAULT_ANNOTATION_SETTINGS.snippetTemplate,
   displayTemplates: { ...DEFAULT_ANNOTATION_SETTINGS.displayTemplates },
-  autoCopy: true,
-  autoPaste: false,
-  autoCopyOnSelect: false,
+  onSelect: "off",
   targetNotePath: "",
   epub: {
     flow: "paginated",
@@ -137,43 +136,28 @@ export class MakiSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Copy link to clipboard")
-      .setDesc("Copy the snippet whenever an annotation is created.")
-      .addToggle((toggle) =>
-        toggle.setValue(s.autoCopy).onChange(async (value) => {
-          await this.plugin.updateSettings((settings) => {
-            settings.autoCopy = value;
-          });
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName("Copy link on selection")
+      .setName("On text selection")
       .setDesc(
-        "Selecting text in the preview automatically acts as “Copy link to " +
-          "selection” with the toolbar color — no command needed.",
+        "What selecting text in the preview does by itself, with the toolbar " +
+          "color — no command needed.",
       )
-      .addToggle((toggle) =>
-        toggle.setValue(s.autoCopyOnSelect).onChange(async (value) => {
-          await this.plugin.updateSettings((settings) => {
-            settings.autoCopyOnSelect = value;
-          });
-        }),
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOptions({
+            off: "Do nothing",
+            copy: "Copy link to clipboard",
+            insert: "Insert link into note",
+          })
+          .setValue(s.onSelect)
+          .onChange(async (value) => {
+            await this.plugin.updateSettings((settings) => {
+              settings.onSelect = value as OnSelectAction;
+            });
+          }),
       );
 
     new Setting(containerEl)
-      .setName("Auto-paste into a note")
-      .setDesc("Insert the snippet into the target note without leaving the preview.")
-      .addToggle((toggle) =>
-        toggle.setValue(s.autoPaste).onChange(async (value) => {
-          await this.plugin.updateSettings((settings) => {
-            settings.autoPaste = value;
-          });
-        }),
-      );
-
-    new Setting(containerEl)
-      .setName("Auto-paste target note")
+      .setName("Note to insert links into")
       .setDesc("Vault path of the target note. Leave empty for the last active markdown note.")
       .addText((text) =>
         text

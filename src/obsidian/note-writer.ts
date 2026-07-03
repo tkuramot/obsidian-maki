@@ -30,7 +30,7 @@ export class ObsidianNoteWriter {
       await navigator.clipboard.writeText(text);
     } catch (error) {
       // Chromium rejects top-frame writes while the focused frame is an EPUB
-      // section iframe ("Document is not focused") — exactly where auto-copy
+      // section iframe ("Document is not focused") — exactly where annotate-on-selection
       // and relayed hotkeys run. Electron's clipboard has no focus rule.
       const clipboard = electronClipboard();
       if (!clipboard) throw error;
@@ -67,7 +67,7 @@ export class ObsidianNoteWriter {
     });
   }
 
-  /** The most recently active markdown view (the default auto-paste target). */
+  /** The most recently active markdown view (the default insert target). */
   private lastActiveMarkdownView(): MarkdownView | null {
     const active = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (active) return active;

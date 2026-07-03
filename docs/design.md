@@ -179,7 +179,7 @@ interface DocumentViewer {
    *  the note to paste into): it stays current until the user clears it
    *  inside the viewer or replaces it. */
   captureSelection(): TextSelection | null;
-  /** Fires whenever the live selection changes (for auto-copy, palette state). */
+  /** Fires whenever the live selection changes (for annotate-on-selection, palette state). */
   onSelectionChange(cb: (sel: TextSelection | null) => void): Disposable;
 
   /** Draw / erase highlights (FR-5.2, FR-5.3). Idempotent by id. */
@@ -540,10 +540,11 @@ collaborators to the core:
   `reconciler.detach(viewer)` (§4.5) and `viewer.destroy()`. Every subscription is a
   `Disposable` registered with the plugin, so unloading the plugin tears everything
   down in one pass.
-- **`ObsidianNoteWriter`** (concrete, §3.6): clipboard + auto-paste into the target note
+- **`ObsidianNoteWriter`** (concrete, §3.6): clipboard + insert into the target note
   (editor when open, else `vault.process`), with the configurable target strategy
   (FR-8.3). Injected into the core, not a port.
-- **Settings tab**: palette, templates, auto-paste, EPUB rendering prefs (FR-8).
+- **Settings tab**: palette, templates, the on-selection action, the insert
+  target, EPUB rendering prefs (FR-8).
 - **Hover / backlink navigation** (FR-6): register hover-link sources and handle clicks
   on annotation links → `viewer.reveal`.
 
@@ -609,7 +610,7 @@ The rule: **every framework boundary is a thin adapter; the logic behind it is p
 | Concern | Humble object (no logic, not unit-tested) | Pure core (unit-tested) |
 | --- | --- | --- |
 | Create annotation | `captureSelection`, `ObsidianNoteWriter` | `AnnotationService`, link build, template |
-| Auto-copy on selection | `selectionchange` listeners (adapters), the timer | `SelectionAutoAnnotator` (settle, once-per-selection, toggle) |
+| Annotate on selection | `selectionchange` listeners (adapters), the timer | `SelectionAutoAnnotator` (settle, once-per-selection, toggle) |
 | Render highlights | `drawHighlight` / `eraseHighlight`, `ObsidianBacklinkIndex` | `HighlightReconciler` (decode, id, diff, merge) |
 | Link format | — | `LocatorCodec` (encode/decode, CFI encoding) |
 | PDF geometry | acquire text boxes, inject `<div>`s | `PdfGeometry` (rects, merging) |
@@ -709,7 +710,7 @@ src/
     template-engine.ts        #   TemplateEngine
     color-model.ts            #   ColorModel (the value↔RGB logic; the `Color` *type* is in types.ts)
     pdf-geometry.ts           #   PdfGeometry (rect math)
-    selection-auto-annotator.ts #   SelectionAutoAnnotator (auto-copy-on-selection mode)
+    selection-auto-annotator.ts #   SelectionAutoAnnotator (annotate-on-selection mode)
     viewer-registry.ts        #   ViewerRegistry
     locator/                  #   ← the one concern that starts as a directory
       codec.ts                #     type LocatorCodec, Codecs (owned by the codec family)
@@ -774,7 +775,7 @@ Differences from the earlier sketch, and why:
 - **Settings need a schema version from day one.** Palette, templates, and reading
   positions are persisted plugin data; a `version` field costs one line now and makes
   every future settings migration cheap instead of a guessing game.
-- **Open:** exact target-selection strategy for auto-paste; whether to offer a
+- **Open:** exact target-selection strategy for insert; whether to offer a
   dedicated annotations panel; whether `epub-native` should reuse `backend: 'epub'` or
   be distinct.
 
