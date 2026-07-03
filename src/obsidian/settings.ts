@@ -11,6 +11,9 @@ import type MakiPlugin from "../main";
 
 /** EPUB rendering preferences. */
 export interface EpubPreferences {
+  /** Reading flow: page-flipping columns or a continuous scroll.
+   * No settings-tab UI — toggled from the viewer toolbar's display options. */
+  flow: "paginated" | "scrolled";
   /** Maximum column count of the paginated layout. */
   maxColumnCount: number;
   /** Font size in percent of the theme default (100 = unchanged). */
@@ -46,6 +49,7 @@ export const DEFAULT_SETTINGS: MakiSettings = {
   autoPaste: false,
   targetNotePath: "",
   epub: {
+    flow: "paginated",
     maxColumnCount: 1,
     fontSizePercent: 100,
     lineHeight: 1.5,

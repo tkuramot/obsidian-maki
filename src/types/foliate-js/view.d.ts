@@ -41,6 +41,8 @@ export interface ResolvedNavigation {
 /** Detail of the `relocate` event / shape of `lastLocation`. */
 export interface FoliateLocation {
   fraction?: number | undefined;
+  /** Synthetic "locations" (fixed-size chunks), à la Kindle. 0-based current. */
+  location?: { current: number; next?: number; total: number } | undefined;
   tocItem?: FoliateTocItem | null | undefined;
   pageItem?: FoliateTocItem | null | undefined;
   cfi?: string | undefined;

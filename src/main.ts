@@ -65,6 +65,8 @@ export default class MakiPlugin extends Plugin {
       new PdfViewerProvider(),
       new EpubViewerProvider({
         prefs: () => this.settings.epub,
+        // updateSettings re-applies preferences to every open EPUB view.
+        updatePrefs: (mutate) => void this.updateSettings((settings) => mutate(settings.epub)),
         getPosition: (path) => this.settings.readingPositions[path],
         setPosition: (path, cfi) => {
           this.settings.readingPositions[path] = cfi;

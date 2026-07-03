@@ -84,9 +84,12 @@ workflow, generalized so that PDF and EPUB behave the same way.
 - **FR-1.4** Remember and restore the last reading position per document (PDF: page +
   scroll; EPUB: location/CFI). This is a *reading* position, not an annotation.
 - **FR-1.5** Apply Obsidian's theme (light/dark) to the EPUB preview.
-- **FR-1.6** Provide EPUB reading navigation: a table of contents, previous/next
-  section, and a reading-progress indicator. (PDF needs none of this — Obsidian's
-  built-in viewer already has thumbnails, outline, and search.)
+- **FR-1.6** Provide EPUB reading navigation, styled after Obsidian's built-in PDF
+  toolbar: a table-of-contents button, previous/next page, a "page" number display
+  and input (pages are foliate's synthetic fixed-size locations), a
+  paginated/scrolled layout toggle, and a reading-progress indicator. (PDF needs
+  none of this — Obsidian's built-in viewer already has thumbnails, outline, and
+  search.)
 
 ### FR-2 — Select text
 

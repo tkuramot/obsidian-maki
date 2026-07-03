@@ -1,12 +1,22 @@
 /**
  * `MakiEpubView` — the plugin-owned `ItemView` hosting `<foliate-view>`.
- * Owns the reader chrome (TOC, prev/next, progress), restores the reading
+ * Owns the reader chrome (mirroring the native PDF viewer's toolbar: TOC
+ * menu, prev/next, page input, display options), restores the reading
  * position, applies rendering preferences and theme follow, and hands the
  * adapter to the provider.
  * All humble — presentation of foliate state, no decisions.
  */
 
-import { debounce, FileView, Notice, setIcon, TFile, type WorkspaceLeaf } from "obsidian";
+import {
+  debounce,
+  FileView,
+  Menu,
+  Notice,
+  setIcon,
+  setTooltip,
+  TFile,
+  type WorkspaceLeaf,
+} from "obsidian";
 import { EpubLocatorCodec } from "../../core/locator/epub-codec";
 import { parseSubpath } from "../../core/locator/link";
 import { EPUB } from "foliate-js/epub.js";
@@ -25,6 +35,7 @@ export const MAKI_EPUB_VIEW_TYPE = "maki-epub";
 /** Rendering preferences, as this view needs them. The settings
  * object satisfies this structurally. */
 export interface EpubViewPreferences {
+  flow: "paginated" | "scrolled";
   maxColumnCount: number;
   fontSizePercent: number;
   lineHeight: number;
@@ -35,6 +46,9 @@ export interface EpubViewPreferences {
 /** What the integration layer injects into the view. */
 export interface EpubViewDeps {
   prefs(): EpubViewPreferences;
+  /** Persist a preference change (from the toolbar's display-options menu)
+   * and re-apply preferences to every open EPUB view. */
+  updatePrefs(mutate: (prefs: EpubViewPreferences) => void): void;
   /** Persisted reading position (a wrapped CFI), per document path. */
   getPosition(path: string): string | undefined;
   setPosition(path: string, cfi: string): void;
@@ -46,8 +60,12 @@ export class MakiEpubView extends FileView {
   private foliate: FoliateView | null = null;
   private adapter: EpubViewerAdapter | null = null;
   private loader: VaultZipLoader | null = null;
-  private tocSelect: HTMLSelectElement | null = null;
-  private progressEl: HTMLElement | null = null;
+  private toc: FoliateTocItem[] = [];
+  private currentTocHref: string | null = null;
+  private pageInputEl: HTMLInputElement | null = null;
+  private pageCountEl: HTMLElement | null = null;
+  private chapterEl: HTMLElement | null = null;
+  private locationTotal = 0;
   private pendingSubpath: string | null = null;
 
   private ready!: Promise<EpubViewerAdapter>;
@@ -122,6 +140,7 @@ export class MakiEpubView extends FileView {
     const renderer = this.foliate?.renderer;
     if (!renderer) return;
     const prefs = this.deps.prefs();
+    renderer.setAttribute("flow", prefs.flow === "scrolled" ? "scrolled" : "paginated");
     renderer.setAttribute("max-column-count", String(prefs.maxColumnCount));
     renderer.setAttribute("margin", `${prefs.marginPx}px`);
     renderer.setStyles?.(this.bookCss(prefs));
@@ -135,19 +154,46 @@ export class MakiEpubView extends FileView {
     contentEl.empty();
     contentEl.addClass("maki-epub-view");
 
-    const toolbar = contentEl.createDiv({ cls: "maki-epub-toolbar" });
-    const prevBtn = toolbar.createEl("button", {
-      cls: "clickable-icon",
-      attr: { "aria-label": "Previous section" },
+    // Same markup/classes as the native PDF viewer's toolbar, so Obsidian's
+    // own styles (and themes) apply unchanged.
+    const toolbar = contentEl.createDiv({ cls: "pdf-toolbar" });
+    const left = toolbar.createDiv({ cls: "pdf-toolbar-left" });
+    const right = toolbar.createDiv({ cls: "pdf-toolbar-right" });
+
+    const tocBtn = left.createDiv({ cls: "clickable-icon" });
+    setIcon(tocBtn, "lucide-list");
+    setTooltip(tocBtn, "Table of contents");
+    tocBtn.addEventListener("click", () => this.showTocMenu(tocBtn));
+
+    left.createDiv({ cls: "pdf-toolbar-spacer" });
+
+    const prevBtn = left.createDiv({ cls: "clickable-icon" });
+    setIcon(prevBtn, "lucide-chevron-left");
+    setTooltip(prevBtn, "Previous page");
+    left.createDiv({ cls: "pdf-toolbar-divider" });
+    const nextBtn = left.createDiv({ cls: "clickable-icon" });
+    setIcon(nextBtn, "lucide-chevron-right");
+    setTooltip(nextBtn, "Next page");
+
+    const displayBtn = left.createDiv({ cls: "clickable-icon" });
+    setIcon(displayBtn, "lucide-chevron-down");
+    setTooltip(displayBtn, "Display options");
+    displayBtn.addEventListener("click", () => this.showDisplayMenu(displayBtn));
+
+    left.createDiv({ cls: "pdf-toolbar-spacer" });
+
+    this.pageInputEl = left.createEl("input", {
+      cls: "pdf-page-input",
+      type: "number",
+      attr: { min: "1" },
     });
-    setIcon(prevBtn, "chevron-left");
-    this.tocSelect = toolbar.createEl("select", { cls: "dropdown maki-epub-toc" });
-    const nextBtn = toolbar.createEl("button", {
-      cls: "clickable-icon",
-      attr: { "aria-label": "Next section" },
+    this.pageInputEl.addEventListener("click", () => this.pageInputEl?.select());
+    this.pageInputEl.addEventListener("change", () => {
+      if (this.pageInputEl) void this.goToPage(this.pageInputEl.value);
     });
-    setIcon(nextBtn, "chevron-right");
-    this.progressEl = toolbar.createSpan({ cls: "maki-epub-progress" });
+    this.pageCountEl = left.createSpan({ cls: "pdf-page-numbers" });
+
+    this.chapterEl = right.createSpan({ cls: "maki-epub-chapter" });
 
     const bookEl = contentEl.createDiv({ cls: "maki-epub-book" });
 
@@ -174,7 +220,7 @@ export class MakiEpubView extends FileView {
     const adapter = new EpubViewerAdapter({ path: file.path, backend: "epub" }, foliate);
     await foliate.open(book);
     this.applyPreferences();
-    this.populateToc(book.toc ?? [], foliate);
+    this.toc = book.toc ?? [];
 
     const lastLocation = this.deps.getPosition(file.path);
     await foliate.init(
@@ -198,8 +244,12 @@ export class MakiEpubView extends FileView {
     this.foliate = null;
     void this.loader?.close().catch(() => undefined);
     this.loader = null;
-    this.tocSelect = null;
-    this.progressEl = null;
+    this.toc = [];
+    this.currentTocHref = null;
+    this.pageInputEl = null;
+    this.pageCountEl = null;
+    this.chapterEl = null;
+    this.locationTotal = 0;
   }
 
   private resetReady(): void {
@@ -213,36 +263,96 @@ export class MakiEpubView extends FileView {
 
   // ---- chrome --------------------------------------------------------------
 
-  private populateToc(toc: FoliateTocItem[], foliate: FoliateView): void {
-    const select = this.tocSelect;
-    if (!select) return;
-    select.empty();
-    select.createEl("option", { text: "Table of contents", value: "" });
+  private showTocMenu(anchor: HTMLElement): void {
+    const foliate = this.foliate;
+    if (!foliate) return;
+    const menu = new Menu();
+    if (this.toc.length === 0) {
+      menu.addItem((item) => item.setTitle("No table of contents").setDisabled(true));
+    }
     const addItems = (items: FoliateTocItem[], depth: number): void => {
-      for (const item of items) {
-        const label = `${" ".repeat(depth * 2)}${item.label?.trim() ?? "…"}`;
-        const option = select.createEl("option", { text: label, value: item.href ?? "" });
-        if (item.href === undefined) option.disabled = true;
-        if (item.subitems) addItems(item.subitems, depth + 1);
+      for (const entry of items) {
+        const href = entry.href;
+        menu.addItem((item) => {
+          // em-space indentation: menus have no tree widget
+          item.setTitle("\u2003".repeat(depth) + (entry.label?.trim() ?? "\u2026"));
+          if (href === undefined) item.setDisabled(true);
+          else {
+            item.setChecked(href === this.currentTocHref ? true : null);
+            item.onClick(() => void foliate.goTo(href));
+          }
+        });
+        if (entry.subitems) addItems(entry.subitems, depth + 1);
       }
     };
-    addItems(toc, 0);
-    select.addEventListener("change", () => {
-      if (select.value !== "") void foliate.goTo(select.value);
-    });
+    addItems(this.toc, 0);
+    this.showBelow(menu, anchor);
+  }
+
+  private showDisplayMenu(anchor: HTMLElement): void {
+    const prefs = this.deps.prefs();
+    // The fixed-layout renderer has no scrolled flow.
+    const fixedLayout = this.foliate?.isFixedLayout ?? false;
+    const menu = new Menu();
+    menu.addItem((item) =>
+      item
+        .setIcon("lucide-book-open")
+        .setTitle("Paginated")
+        .setDisabled(fixedLayout)
+        .setChecked(prefs.flow !== "scrolled")
+        .onClick(() => this.deps.updatePrefs((p) => (p.flow = "paginated"))),
+    );
+    menu.addItem((item) =>
+      item
+        .setIcon("lucide-scroll")
+        .setTitle("Scrolled")
+        .setDisabled(fixedLayout)
+        .setChecked(prefs.flow === "scrolled")
+        .onClick(() => this.deps.updatePrefs((p) => (p.flow = "scrolled"))),
+    );
+    menu.addSeparator();
+    menu.addItem((item) =>
+      item
+        .setIcon("lucide-palette")
+        .setTitle("Adapt to theme")
+        .setChecked(prefs.followTheme)
+        .onClick(() => this.deps.updatePrefs((p) => (p.followTheme = !p.followTheme))),
+    );
+    this.showBelow(menu, anchor);
+  }
+
+  /** Drop a menu under a toolbar button, as the native PDF toolbar does. */
+  private showBelow(menu: Menu, anchor: HTMLElement): void {
+    const rect = anchor.getBoundingClientRect();
+    menu.showAtPosition({ x: rect.x, y: rect.bottom, width: rect.width, overlap: true, left: false });
+  }
+
+  /** Jump to a 1-based "page" (a foliate location) typed into the page input. */
+  private async goToPage(value: string): Promise<void> {
+    const foliate = this.foliate;
+    const total = this.locationTotal;
+    const n = Number(value);
+    if (!foliate || total <= 0 || !Number.isFinite(n)) return;
+    const page = Math.min(Math.max(Math.round(n), 1), total);
+    await foliate.goToFraction((page - 1) / total);
   }
 
   private onRelocate(location: FoliateLocation, path: string): void {
-    if (this.progressEl) {
+    const loc = location.location;
+    if (this.pageInputEl && this.pageCountEl && loc !== undefined && loc.total > 0) {
+      this.locationTotal = loc.total;
+      this.pageInputEl.max = String(loc.total);
+      this.pageInputEl.value = String(Math.min(loc.current + 1, loc.total));
+      this.pageCountEl.setText(`of ${loc.total}`);
+    }
+    this.currentTocHref = location.tocItem?.href ?? null;
+    if (this.chapterEl) {
       const percent =
         typeof location.fraction === "number"
           ? `${Math.round(location.fraction * 100)}%`
           : "";
       const chapter = location.tocItem?.label?.trim() ?? "";
-      this.progressEl.setText([chapter, percent].filter((s) => s !== "").join(" · "));
-    }
-    if (this.tocSelect && location.tocItem?.href !== undefined) {
-      this.tocSelect.value = location.tocItem.href;
+      this.chapterEl.setText([chapter, percent].filter((s) => s !== "").join(" · "));
     }
     if (typeof location.cfi === "string" && location.cfi !== "") {
       this.savePosition(path, location.cfi);
