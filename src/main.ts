@@ -18,12 +18,13 @@ import { HighlightReconciler } from "./core/highlight-reconciler";
 import type { Codecs } from "./core/locator/codec";
 import { EpubLocatorCodec } from "./core/locator/epub-codec";
 import { PdfLocatorCodec } from "./core/locator/pdf-codec";
+import { SelectionAutoAnnotator } from "./core/selection-auto-annotator";
 import { TemplateEngine } from "./core/template-engine";
 import type { Color, Disposable, HighlightId } from "./core/types";
 import { ViewerRegistry } from "./core/viewer-registry";
 import { ObsidianBacklinkIndex } from "./obsidian/backlink-index";
 import { mountColorPicker } from "./obsidian/color-picker";
-import { registerCommands } from "./obsidian/commands";
+import { annotateViewer, registerCommands } from "./obsidian/commands";
 import { SourceSuggestModal } from "./obsidian/modals";
 import { ObsidianNoteWriter } from "./obsidian/note-writer";
 import { DEFAULT_SETTINGS, MakiSettingTab, type MakiSettings } from "./obsidian/settings";
@@ -85,9 +86,29 @@ export default class MakiPlugin extends Plugin {
       this.register(provider.setup(this).dispose);
     }
 
+    // Auto-copy mode (FR-8.3): a settled selection acts as "Copy link to
+    // selection". Quiet on unusable selections — they are not user intent.
+    const autoAnnotator = new SelectionAutoAnnotator({
+      enabled: () => this.settings.autoCopyOnSelect,
+      annotate: (viewer) => void annotateViewer(this, viewer, this.selectedColor(), { quiet: true }),
+    });
+
     const index = new ObsidianBacklinkIndex(this.app);
-    this.viewers = new ViewerManager(this.app, registry, this.reconciler, index, (viewer, id) =>
-      this.openHighlightSources(viewer, id),
+    this.viewers = new ViewerManager(
+      this.app,
+      registry,
+      this.reconciler,
+      index,
+      (viewer, id) => this.openHighlightSources(viewer, id),
+      (viewer) => {
+        const sub = viewer.onSelectionChange((sel) => autoAnnotator.onSelection(viewer, sel));
+        return {
+          dispose: () => {
+            sub.dispose();
+            autoAnnotator.detach(viewer);
+          },
+        };
+      },
     );
 
     this.registerEvent(this.app.workspace.on("layout-change", () => this.viewers.scan()));

@@ -41,6 +41,8 @@ export class ViewerManager {
     private readonly index: ObsidianBacklinkIndex,
     /** A click on a drawn highlight, resolved by the caller. */
     private readonly onHighlightActivate: (viewer: DocumentViewer, id: string) => void,
+    /** Optional per-viewer binding (e.g. auto-copy-on-selection), disposed on teardown. */
+    private readonly bindViewer?: (viewer: DocumentViewer) => Disposable,
   ) {}
 
   /**
@@ -117,6 +119,7 @@ export class ViewerManager {
       entry.subs.push(
         viewer.onHighlightActivate((id) => this.onHighlightActivate(viewer, id)),
       );
+      if (this.bindViewer) entry.subs.push(this.bindViewer(viewer));
       this.open.set(leaf, entry);
       this.reconcile(entry, ref);
     } catch (error) {

@@ -35,6 +35,8 @@ export interface MakiSettings {
   displayTemplates: { pdf: string; epub: string };
   autoCopy: boolean;
   autoPaste: boolean;
+  /** Auto-copy mode: a settled text selection runs "Copy link to selection". */
+  autoCopyOnSelect: boolean;
   /** Auto-paste target: empty = last active markdown note. */
   targetNotePath: string;
   epub: EpubPreferences;
@@ -50,6 +52,7 @@ export const DEFAULT_SETTINGS: MakiSettings = {
   displayTemplates: { ...DEFAULT_ANNOTATION_SETTINGS.displayTemplates },
   autoCopy: true,
   autoPaste: false,
+  autoCopyOnSelect: false,
   targetNotePath: "",
   epub: {
     flow: "paginated",
@@ -140,6 +143,20 @@ export class MakiSettingTab extends PluginSettingTab {
         toggle.setValue(s.autoCopy).onChange(async (value) => {
           await this.plugin.updateSettings((settings) => {
             settings.autoCopy = value;
+          });
+        }),
+      );
+
+    new Setting(containerEl)
+      .setName("Copy link on selection")
+      .setDesc(
+        "Selecting text in the preview automatically acts as “Copy link to " +
+          "selection” with the toolbar color — no command needed.",
+      )
+      .addToggle((toggle) =>
+        toggle.setValue(s.autoCopyOnSelect).onChange(async (value) => {
+          await this.plugin.updateSettings((settings) => {
+            settings.autoCopyOnSelect = value;
           });
         }),
       );

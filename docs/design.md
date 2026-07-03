@@ -174,7 +174,10 @@ interface DocumentViewer {
   reveal(target: Locator, opts?: { flash?: boolean }): Promise<RevealOutcome>;
   // type RevealOutcome = 'exact' | 'fallback' | 'not-found'  (owned by this file)
 
-  /** The current live user selection, as an abstract selection, or null. */
+  /** The current user selection, as an abstract selection, or null. Must
+   *  survive the DOM selection being taken over by another pane (focusing
+   *  the note to paste into): it stays current until the user clears it
+   *  inside the viewer or replaces it. */
   captureSelection(): TextSelection | null;
   /** Fires whenever the live selection changes (for auto-copy, palette state). */
   onSelectionChange(cb: (sel: TextSelection | null) => void): Disposable;
@@ -606,6 +609,7 @@ The rule: **every framework boundary is a thin adapter; the logic behind it is p
 | Concern | Humble object (no logic, not unit-tested) | Pure core (unit-tested) |
 | --- | --- | --- |
 | Create annotation | `captureSelection`, `ObsidianNoteWriter` | `AnnotationService`, link build, template |
+| Auto-copy on selection | `selectionchange` listeners (adapters), the timer | `SelectionAutoAnnotator` (settle, once-per-selection, toggle) |
 | Render highlights | `drawHighlight` / `eraseHighlight`, `ObsidianBacklinkIndex` | `HighlightReconciler` (decode, id, diff, merge) |
 | Link format | — | `LocatorCodec` (encode/decode, CFI encoding) |
 | PDF geometry | acquire text boxes, inject `<div>`s | `PdfGeometry` (rects, merging) |
@@ -636,6 +640,8 @@ it contains a decision, it belongs in the right column.
     `draw`/`erase` calls on a fake `DocumentViewer` and the returned skip counts
     (FR-5.5).
   - `AnnotationService`: selection → snippet, with fake viewer/codec/writer.
+  - `SelectionAutoAnnotator`: settle debounce, one fire per selection, re-arm on
+    clear, runtime toggle — with an injected scheduler.
   - `TemplateEngine`, `ColorModel`, `PdfGeometry`: pure I/O tables and fixtures.
 - **Shared contract suites.** A suite any `DocumentViewer` implementation must pass (the
   one real port with multiple adapters), plus a suite every codec value must satisfy
@@ -703,6 +709,7 @@ src/
     template-engine.ts        #   TemplateEngine
     color-model.ts            #   ColorModel (the value↔RGB logic; the `Color` *type* is in types.ts)
     pdf-geometry.ts           #   PdfGeometry (rect math)
+    selection-auto-annotator.ts #   SelectionAutoAnnotator (auto-copy-on-selection mode)
     viewer-registry.ts        #   ViewerRegistry
     locator/                  #   ← the one concern that starts as a directory
       codec.ts                #     type LocatorCodec, Codecs (owned by the codec family)

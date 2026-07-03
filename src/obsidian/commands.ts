@@ -5,20 +5,27 @@
  */
 
 import { Notice } from "obsidian";
+import type { DocumentViewer } from "../core/document-viewer";
 import type { Color } from "../core/types";
 import type MakiPlugin from "../main";
 import { ColorSuggestModal, CommentModal } from "./modals";
 
-async function annotate(plugin: MakiPlugin, color: Color, comment?: string): Promise<void> {
-  const viewer = plugin.viewers.activeViewer();
-  if (!viewer) {
-    new Notice("Maki: no document preview is open");
-    return;
-  }
+/**
+ * Run the annotate pipeline on a specific viewer and confirm the effects
+ * with a notice (FR-9.4). `quiet` suppresses the "nothing is selected"
+ * complaint — auto-copy-on-selection fires on selections the backend may
+ * reject (e.g. cross-page), which must not nag.
+ */
+export async function annotateViewer(
+  plugin: MakiPlugin,
+  viewer: DocumentViewer,
+  color: Color,
+  opts: { comment?: string | undefined; quiet?: boolean } = {},
+): Promise<void> {
   try {
-    const result = await plugin.annotations.annotate(viewer, color, comment);
+    const result = await plugin.annotations.annotate(viewer, color, opts.comment);
     if (!result) {
-      new Notice("Maki: nothing is selected");
+      if (!opts.quiet) new Notice("Maki: nothing is selected");
       return;
     }
     const s = plugin.settings;
@@ -31,6 +38,15 @@ async function annotate(plugin: MakiPlugin, color: Color, comment?: string): Pro
     console.error("Maki: annotate failed", error);
     new Notice(`Maki: ${error instanceof Error ? error.message : "annotation failed"}`);
   }
+}
+
+async function annotate(plugin: MakiPlugin, color: Color, comment?: string): Promise<void> {
+  const viewer = plugin.viewers.activeViewer();
+  if (!viewer) {
+    new Notice("Maki: no document preview is open");
+    return;
+  }
+  await annotateViewer(plugin, viewer, color, { comment });
 }
 
 export function registerCommands(plugin: MakiPlugin): void {
@@ -76,14 +92,32 @@ export function registerCommands(plugin: MakiPlugin): void {
 
   plugin.addCommand({
     id: "toggle-auto-copy",
-    name: "Toggle auto-copy",
+    // Named after the setting it toggles — "auto-copy" reads as the
+    // copy-on-selection mode (pdf-plus's sense), which is the command below.
+    name: "Toggle copy link to clipboard",
     callback: () => {
       void plugin
         .updateSettings((s) => {
           s.autoCopy = !s.autoCopy;
         })
         .then(() => {
-          new Notice(`Maki: auto-copy ${plugin.settings.autoCopy ? "on" : "off"}`);
+          new Notice(`Maki: copy link to clipboard ${plugin.settings.autoCopy ? "on" : "off"}`);
+        });
+    },
+  });
+
+  plugin.addCommand({
+    id: "toggle-copy-on-select",
+    name: "Toggle copy link on selection",
+    callback: () => {
+      void plugin
+        .updateSettings((s) => {
+          s.autoCopyOnSelect = !s.autoCopyOnSelect;
+        })
+        .then(() => {
+          new Notice(
+            `Maki: copy link on selection ${plugin.settings.autoCopyOnSelect ? "on" : "off"}`,
+          );
         });
     },
   });

@@ -160,7 +160,9 @@ workflow, generalized so that PDF and EPUB behave the same way.
 - **FR-8.1** A configurable color palette (names → colors).
 - **FR-8.2** Configurable snippet and link-display templates (§6.6).
 - **FR-8.3** Auto-paste / auto-copy / auto-focus toggles and target-selection
-  strategy.
+  strategy, plus an **auto-copy-on-selection mode**: when enabled, a text
+  selection that settles in the preview acts as *Copy link to selection*
+  (with the toolbar color), no command needed.
 - **FR-8.4** EPUB rendering preferences (columns, margins, font size, line height,
   theme follow).
 
@@ -168,7 +170,8 @@ workflow, generalized so that PDF and EPUB behave the same way.
 
 - **FR-9.1** Commands: *Copy link to selection*, *Copy link to selection with
   comment*, *Start rectangular selection* (PDF), *Toggle auto-paste*, *Toggle
-  auto-copy*.
+  copy link to clipboard* (the `autoCopy` setting), *Toggle copy link on
+  selection* (FR-8.3's auto-copy mode).
 - **FR-9.2** A color picker in the preview toolbar (PDF and EPUB alike). The picked
   color is remembered (persisted in settings) and used by every subsequent
   copy/auto-paste annotation action until picked again.
