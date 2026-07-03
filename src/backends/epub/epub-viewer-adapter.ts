@@ -31,7 +31,7 @@ import type {
   View as FoliateView,
 } from "foliate-js/view.js";
 
-const HIGHLIGHT_OPACITY = 0.35;
+const HIGHLIGHT_OPACITY = 0.5;
 const FLASH_VALUE_COLOR = "rgba(255, 208, 0, 0.5)";
 const FLASH_MS = 1200;
 

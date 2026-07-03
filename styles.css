@@ -86,3 +86,136 @@
 .maki-comment-input {
   width: 100%;
 }
+
+/* ---- settings: palette editor ---- */
+
+/* The color list is a full-width second line of the setting item. */
+.maki-palette-setting {
+  flex-wrap: wrap;
+}
+
+.maki-palette-chips {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding-top: var(--size-4-2);
+}
+
+/* One color = one row (swatch + name + delete), like the toolbar picker's
+ * menu. The fixed name width keeps the delete icons in a straight column. */
+.maki-color-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+  border: none;
+  border-radius: var(--radius-s);
+  padding: var(--size-2-2) var(--size-2-3);
+  background: transparent;
+  box-shadow: none;
+  height: auto;
+  font-size: var(--font-ui-small);
+  color: var(--text-normal);
+}
+
+.maki-color-chip:hover {
+  background: var(--background-modifier-hover);
+}
+
+/* A round dot (same look as the toolbar picker's); the real color input is
+ * stretched invisibly over it. */
+.maki-chip-swatch {
+  position: relative;
+  width: var(--icon-size, 18px);
+  height: var(--icon-size, 18px);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--background-modifier-border);
+  flex-shrink: 0;
+}
+
+.maki-chip-swatch:hover {
+  box-shadow:
+    inset 0 0 0 1px var(--background-modifier-border),
+    0 0 0 2px var(--background-modifier-border-hover);
+}
+
+.maki-chip-swatch-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* The name reads as plain text; hover hints and focus confirms editability. */
+.maki-chip-name {
+  width: 14ch;
+  border: none;
+  background: transparent;
+  padding: 0;
+  height: auto;
+  font-size: var(--font-ui-small);
+  color: var(--text-normal);
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.maki-chip-name:hover {
+  box-shadow: inset 0 -1px 0 var(--background-modifier-border-hover);
+}
+
+.maki-chip-name:focus {
+  box-shadow: inset 0 -1px 0 var(--interactive-accent);
+}
+
+/* Delete stays out of the way until the row is hovered. */
+.maki-chip-delete {
+  all: unset;
+  display: flex;
+  align-items: center;
+  padding: var(--size-2-1);
+  cursor: pointer;
+  color: var(--text-faint);
+  opacity: 0;
+  transition: opacity 100ms ease-in-out, color 100ms ease-in-out;
+}
+
+.maki-color-chip:hover .maki-chip-delete,
+.maki-chip-delete:focus-visible {
+  opacity: 1;
+}
+
+.maki-chip-delete svg {
+  width: var(--icon-xs, 14px);
+  height: var(--icon-xs, 14px);
+}
+
+.maki-chip-delete:hover {
+  color: var(--text-error);
+}
+
+/* Quiet trailing row that appends a new color. */
+.maki-chip-add {
+  cursor: pointer;
+  gap: var(--size-2-2);
+  color: var(--text-muted);
+}
+
+.maki-chip-add:hover {
+  color: var(--text-normal);
+}
+
+.maki-chip-add-icon {
+  display: flex;
+  align-items: center;
+}
+
+.maki-chip-add-icon svg {
+  width: var(--icon-xs, 14px);
+  height: var(--icon-xs, 14px);
+}

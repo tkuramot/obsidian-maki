@@ -4,7 +4,7 @@
  * presentation over `MakiSettings`.
  */
 
-import { PluginSettingTab, Setting } from "obsidian";
+import { Notice, PluginSettingTab, Setting, setIcon, setTooltip } from "obsidian";
 import { DEFAULT_ANNOTATION_SETTINGS } from "../core/annotation-service";
 import { DEFAULT_PALETTE, type Palette } from "../core/color-model";
 import type MakiPlugin from "../main";
@@ -62,23 +62,32 @@ export const DEFAULT_SETTINGS: MakiSettings = {
   readingPositions: {},
 };
 
-/** `yellow: 255,208,0` lines ↔ Palette. Invalid lines are dropped. */
-export function parsePaletteText(text: string): Palette {
-  const palette: Palette = {};
-  for (const line of text.split("\n")) {
-    const match = /^\s*([\w-]+)\s*:\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*$/.exec(line);
-    if (!match) continue;
-    const rgb = [Number(match[2]), Number(match[3]), Number(match[4])];
-    if (rgb.some((n) => n > 255)) continue;
-    palette[match[1]!] = rgb as [number, number, number];
-  }
-  return palette;
+/** Palette names end up in link subpaths (`color=<name>`, spec §6). */
+const PALETTE_NAME_PATTERN = /^[\w-]+$/;
+
+function rgbToHex(rgb: [number, number, number]): string {
+  return `#${rgb.map((n) => n.toString(16).padStart(2, "0")).join("")}`;
 }
 
-export function serializePaletteText(palette: Palette): string {
-  return Object.entries(palette)
-    .map(([name, rgb]) => `${name}: ${rgb.join(",")}`)
-    .join("\n");
+function hexToRgb(hex: string): [number, number, number] | null {
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!match) return null;
+  return [parseInt(match[1]!, 16), parseInt(match[2]!, 16), parseInt(match[3]!, 16)];
+}
+
+/** Rename a palette key while keeping the display order of the entries. */
+function renamePaletteColor(palette: Palette, from: string, to: string): Palette {
+  const next: Palette = {};
+  for (const [name, rgb] of Object.entries(palette)) next[name === from ? to : name] = rgb;
+  return next;
+}
+
+/** First `color-N` not already taken. */
+function nextColorName(palette: Palette): string {
+  for (let n = 1; ; n++) {
+    const name = `color-${n}`;
+    if (!(name in palette)) return name;
+  }
 }
 
 export class MakiSettingTab extends PluginSettingTab {
@@ -91,18 +100,7 @@ export class MakiSettingTab extends PluginSettingTab {
     const s = this.plugin.settings;
     containerEl.empty();
 
-    new Setting(containerEl)
-      .setName("Color palette")
-      .setDesc("One color per line: name: r,g,b.")
-      .addTextArea((text) =>
-        text.setValue(serializePaletteText(s.palette)).onChange(async (value) => {
-          const palette = parsePaletteText(value);
-          if (Object.keys(palette).length === 0) return; // never empty the palette
-          await this.plugin.updateSettings((settings) => {
-            settings.palette = palette;
-          });
-        }),
-      );
+    this.displayPalette();
 
     new Setting(containerEl)
       .setName("Snippet template")
@@ -239,5 +237,113 @@ export class MakiSettingTab extends PluginSettingTab {
           });
         }),
       );
+  }
+
+  /**
+   * The palette as a strip of chips — the same "swatch + name" the toolbar
+   * picker menu shows, so the setting looks like what it configures.
+   */
+  private displayPalette(): void {
+    const setting = new Setting(this.containerEl)
+      .setName("Highlight colors")
+      .setDesc(
+        "The palette offered by the toolbar picker; the first color is the default. " +
+          "Links in notes store the color name, so renaming or deleting one makes " +
+          "existing annotations fall back to the default.",
+      );
+    setting.settingEl.addClass("maki-palette-setting");
+
+    // Full-width second line inside the same setting item.
+    const strip = setting.settingEl.createDiv({ cls: "maki-palette-chips" });
+    const palette = this.plugin.settings.palette;
+    const lastColor = Object.keys(palette).length <= 1;
+    for (const [name, rgb] of Object.entries(palette)) {
+      this.displayColorChip(strip, name, rgb, lastColor);
+    }
+
+    const add = strip.createEl("button", { cls: "maki-color-chip maki-chip-add" });
+    const addIcon = add.createSpan({ cls: "maki-chip-add-icon" });
+    setIcon(addIcon, "plus");
+    add.createSpan({ text: "Add color" });
+    add.addEventListener("click", async () => {
+      await this.plugin.updateSettings((settings) => {
+        settings.palette[nextColorName(settings.palette)] = [255, 165, 0];
+      });
+      this.display();
+    });
+  }
+
+  /** One chip: swatch (opens the color dialog) + inline name + delete. */
+  private displayColorChip(
+    strip: HTMLElement,
+    name: string,
+    rgb: [number, number, number],
+    lastColor: boolean,
+  ): void {
+    const chip = strip.createDiv({ cls: "maki-color-chip" });
+    // The handlers below edit by key; track renames so they keep working
+    // without a full re-render.
+    let currentName = name;
+
+    // A round dot (same look as the toolbar picker) with an invisible native
+    // color input stretched over it — styling the input directly clips it.
+    const swatch = chip.createDiv({ cls: "maki-chip-swatch" });
+    swatch.style.backgroundColor = `rgb(${rgb.join(",")})`;
+    setTooltip(swatch, "Change color");
+    const swatchInput = swatch.createEl("input", {
+      type: "color",
+      cls: "maki-chip-swatch-input",
+    });
+    swatchInput.value = rgbToHex(rgb);
+    swatchInput.addEventListener("change", async () => {
+      const nextRgb = hexToRgb(swatchInput.value);
+      if (!nextRgb) return;
+      swatch.style.backgroundColor = `rgb(${nextRgb.join(",")})`;
+      await this.plugin.updateSettings((settings) => {
+        settings.palette[currentName] = nextRgb;
+      });
+    });
+
+    const nameInput = chip.createEl("input", { type: "text", cls: "maki-chip-name" });
+    nameInput.value = name;
+    setTooltip(nameInput, "Rename (the name is stored in links)");
+    // Commit on blur/Enter, not per keystroke — half-typed names must never
+    // hit the palette (they would churn links and the toolbar picker).
+    nameInput.addEventListener("change", async () => {
+      const next = nameInput.value.trim();
+      if (next === currentName) return;
+      const invalid = !PALETTE_NAME_PATTERN.test(next);
+      if (invalid || next in this.plugin.settings.palette) {
+        new Notice(
+          invalid
+            ? "Color names may only use letters, digits, _ and -."
+            : `A color named "${next}" already exists.`,
+        );
+        nameInput.value = currentName;
+        return;
+      }
+      const previous = currentName;
+      currentName = next;
+      await this.plugin.updateSettings((settings) => {
+        settings.palette = renamePaletteColor(settings.palette, previous, next);
+        if (settings.selectedColor === previous) settings.selectedColor = next;
+      });
+    });
+
+    if (!lastColor) {
+      const remove = chip.createEl("button", {
+        cls: "maki-chip-delete",
+        attr: { "aria-label": "Delete color" },
+      });
+      setIcon(remove, "trash-2");
+      setTooltip(remove, "Delete color");
+      remove.addEventListener("click", async () => {
+        await this.plugin.updateSettings((settings) => {
+          delete settings.palette[currentName];
+          if (settings.selectedColor === currentName) settings.selectedColor = "";
+        });
+        this.display();
+      });
+    }
   }
 }

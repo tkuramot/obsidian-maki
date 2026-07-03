@@ -267,7 +267,7 @@ export class PdfViewerAdapter implements DocumentViewer {
         el.style.top = `${(top / viewport.height) * 100}%`;
         el.style.width = `${(Math.abs(x2 - x1) / viewport.width) * 100}%`;
         el.style.height = `${(Math.abs(y2 - y1) / viewport.height) * 100}%`;
-        el.style.backgroundColor = `rgba(${h.color.rgb.join(",")}, var(--maki-highlight-opacity, 0.35))`;
+        el.style.backgroundColor = `rgba(${h.color.rgb.join(",")}, var(--maki-highlight-opacity, 0.5))`;
         el.addEventListener("click", () => {
           for (const cb of this.activateCbs) cb(h.id);
         });
