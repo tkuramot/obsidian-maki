@@ -22,6 +22,7 @@ import type {
   Locator,
   TextSelection,
 } from "../../core/types";
+import { collapse, compare } from "foliate-js/epubcfi.js";
 import { Overlayer } from "foliate-js/overlayer.js";
 import type {
   FoliateDrawAnnotationDetail,
@@ -33,6 +34,53 @@ import type {
 const HIGHLIGHT_OPACITY = 0.35;
 const FLASH_VALUE_COLOR = "rgba(255, 208, 0, 0.5)";
 const FLASH_MS = 1200;
+
+/**
+ * Snap element-node range endpoints to text positions. Browsers often report
+ * a selection boundary as (element, child index) — e.g. when dragging to the
+ * end of a block — but foliate's `CFI.fromRange` drops offsets on element
+ * steps, turning such a boundary into an inverted range CFI (start sorting
+ * after end) that resolves to a collapsed range and draws nothing.
+ * Returns null when the range contains no text to snap to.
+ */
+function snapToTextEndpoints(range: Range): Range | null {
+  const startsInText = range.startContainer.nodeType === Node.TEXT_NODE;
+  const endsInText = range.endContainer.nodeType === Node.TEXT_NODE;
+  if (startsInText && endsInText) return range;
+
+  const doc = range.commonAncestorContainer.ownerDocument;
+  if (!doc) return null;
+  const walker = doc.createTreeWalker(range.commonAncestorContainer, NodeFilter.SHOW_TEXT);
+  let first: Text | null = null;
+  let last: Text | null = null;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node as Text;
+    if (text.length === 0 || !range.intersectsNode(text)) continue;
+    first ??= text;
+    last = text;
+  }
+  if (!first || !last) return null;
+
+  const snapped = range.cloneRange();
+  // A text node never straddles an element-node boundary, so an intersecting
+  // one lies entirely inside the range on that side: snap to its outer edge.
+  if (!startsInText) snapped.setStart(first, 0);
+  if (!endsInText) snapped.setEnd(last, last.length);
+  return snapped.collapsed ? null : snapped;
+}
+
+/**
+ * A range CFI whose start sorts after its end can only resolve to a collapsed
+ * DOM range, so it silently draws nothing; refuse it instead — both before
+ * persisting (captureSelection) and when drawing links that already carry one.
+ */
+function isInvertedRangeCfi(cfi: string): boolean {
+  try {
+    return compare(collapse(cfi), collapse(cfi, true)) > 0;
+  } catch {
+    return true; // unparseable ⇒ equally undrawable
+  }
+}
 
 export class EpubViewerAdapter implements DocumentViewer {
   readonly backend = "epub" as const;
@@ -143,9 +191,11 @@ export class EpubViewerAdapter implements DocumentViewer {
       const range = sel.getRangeAt(0);
       const text = sel.toString();
       if (text === "") continue;
+      const snapped = snapToTextEndpoints(range);
+      if (!snapped) continue;
       try {
-        const cfi = this.view.getCFI(index, range);
-        if (!cfi) continue;
+        const cfi = this.view.getCFI(index, snapped);
+        if (!cfi || isInvertedRangeCfi(cfi)) continue;
         return {
           locator: { backend: "epub", cfi: unwrapCfi(cfi) },
           text,
@@ -167,6 +217,13 @@ export class EpubViewerAdapter implements DocumentViewer {
   drawHighlight(h: Highlight): void {
     if (h.locator.backend !== "epub") return;
     const value = wrapCfi(h.locator.cfi);
+    if (isInvertedRangeCfi(value)) {
+      console.warn(
+        "Maki: EPUB highlight skipped — inverted range CFI; re-create the annotation",
+        h.locator.cfi,
+      );
+      return;
+    }
     // Replacing an id whose CFI changed leaves no stale overlay behind.
     const previous = this.highlights.get(h.id);
     if (previous && previous.locator.backend === "epub" && previous.locator.cfi !== h.locator.cfi) {
