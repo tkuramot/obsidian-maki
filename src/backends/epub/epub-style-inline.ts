@@ -10,13 +10,28 @@
  * `connect-src`/`default-src`), so each blocked sheet is fetched from the
  * plugin context and mirrored as an inline `<style>`.
  *
+ * Two steps: `parkSectionStylesheets` rewrites the links' `rel` at section
+ * transform time so the document never even attempts the blocked load (no
+ * CSP violation noise), and `SectionStyleInliner` mirrors the parked links
+ * once the section document loads.
+ *
  * CFI safety: only `<head>` is modified in place. A (nonconforming) link
  * outside `<head>` keeps its DOM position — its mirror is appended to
  * `<head>` instead — so body element indices, which CFIs address, never
  * shift.
  */
 
+import type { FoliateBook } from "foliate-js/view.js";
+import { SECTION_HTML_TYPES, transformSectionHtml } from "./section-transform";
+
 const XHTML_NS = "http://www.w3.org/1999/xhtml";
+/** The rel a stylesheet link is parked under until its inline mirror. */
+const PARKED_REL = "maki-stylesheet";
+/**
+ * blob: stylesheet links, minus alternate stylesheets (off by default —
+ * mirroring one as `<style>` would wrongly always apply it).
+ */
+const BLOCKED_LINKS = 'link[rel~="stylesheet" i][href^="blob:"]:not([rel~="alternate" i])';
 /**
  * `@import "blob:…";` as foliate's `replaceCSS` rewrites it. Media-query
  * imports (`@import "…" print;`) are deliberately not matched: inlining
@@ -25,14 +40,37 @@ const XHTML_NS = "http://www.w3.org/1999/xhtml";
 const IMPORT_PATTERN = /@import\s+(?:url\(\s*)?["']?(blob:[^"')\s]+)["']?\s*\)?\s*;/gi;
 const MAX_IMPORT_DEPTH = 4;
 
+/**
+ * Park each section's blocked stylesheet links at transform time: with a
+ * non-stylesheet `rel` the document never attempts the load, so nothing
+ * hits the CSP. Wire this next to `hardenBook`, before `open()`.
+ */
+export function parkSectionStylesheets(book: FoliateBook): void {
+  const target = book.transformTarget;
+  if (!target) return;
+  target.addEventListener("data", (event) => {
+    const detail = (event as CustomEvent<{ data: unknown; type?: string }>).detail;
+    if (!detail?.type || !SECTION_HTML_TYPES.has(detail.type)) return;
+    const mediaType = detail.type;
+    detail.data = Promise.resolve(detail.data).then((data) => {
+      if (typeof data !== "string") return data;
+      return transformSectionHtml(data, mediaType, (doc) => {
+        const links = Array.from(doc.querySelectorAll(BLOCKED_LINKS));
+        for (const link of links) link.setAttribute("rel", PARKED_REL);
+        return links.length > 0;
+      });
+    });
+  });
+}
+
 export class SectionStyleInliner {
   /** Sections share sheets via foliate's loader cache; fetch each once. */
   private readonly cache = new Map<string, Promise<string>>();
 
-  /** Mirror every blocked stylesheet link of a loaded section document. */
+  /** Mirror every parked/blocked stylesheet link of a loaded section. */
   async apply(doc: Document): Promise<void> {
     const links = Array.from(
-      doc.querySelectorAll<HTMLLinkElement>('link[rel~="stylesheet" i][href^="blob:"]'),
+      doc.querySelectorAll<HTMLLinkElement>(`link[rel="${PARKED_REL}"], ${BLOCKED_LINKS}`),
     );
     await Promise.all(
       links.map(async (link) => {

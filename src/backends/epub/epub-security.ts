@@ -16,22 +16,20 @@
  */
 
 import type { FoliateBook } from "foliate-js/view.js";
+import { SECTION_HTML_TYPES, transformSectionHtml } from "./section-transform";
 
 const CSP = "script-src 'none'";
-const HTML_TYPES = new Set(["application/xhtml+xml", "text/html"]);
 
 function injectCsp(source: string, mediaType: string): string {
-  const doc = new DOMParser().parseFromString(source, mediaType as DOMParserSupportedType);
-  const head = doc.querySelector("head");
-  if (!head) return source;
-  const meta = doc.createElement("meta");
-  meta.setAttribute("http-equiv", "Content-Security-Policy");
-  meta.setAttribute("content", CSP);
-  head.insertBefore(meta, head.firstChild);
-  if (mediaType === "text/html") {
-    return `<!DOCTYPE html>${doc.documentElement?.outerHTML ?? source}`;
-  }
-  return new XMLSerializer().serializeToString(doc);
+  return transformSectionHtml(source, mediaType, (doc) => {
+    const head = doc.querySelector("head");
+    if (!head) return false;
+    const meta = doc.createElement("meta");
+    meta.setAttribute("http-equiv", "Content-Security-Policy");
+    meta.setAttribute("content", CSP);
+    head.insertBefore(meta, head.firstChild);
+    return true;
+  });
 }
 
 /** Wire the script-blocking hooks into a parsed book's loader. */
@@ -46,7 +44,7 @@ export function hardenBook(book: FoliateBook): void {
 
   target.addEventListener("data", (event) => {
     const detail = (event as CustomEvent<{ data: unknown; type?: string }>).detail;
-    if (!detail?.type || !HTML_TYPES.has(detail.type)) return;
+    if (!detail?.type || !SECTION_HTML_TYPES.has(detail.type)) return;
     const mediaType = detail.type;
     detail.data = Promise.resolve(detail.data).then((data) =>
       typeof data === "string" ? injectCsp(data, mediaType) : data,

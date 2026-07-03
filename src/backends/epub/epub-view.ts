@@ -29,7 +29,7 @@ import type {
   View as FoliateView,
 } from "foliate-js/view.js";
 import { hardenBook } from "./epub-security";
-import { SectionStyleInliner } from "./epub-style-inline";
+import { parkSectionStylesheets, SectionStyleInliner } from "./epub-style-inline";
 import { EpubViewerAdapter } from "./epub-viewer-adapter";
 import { makeVaultZipLoader, type VaultZipLoader } from "./vault-zip-loader";
 
@@ -208,6 +208,7 @@ export class MakiEpubView extends FileView {
     this.loader = await makeVaultZipLoader(new File([bytes], file.name));
     const book = await new EPUB(this.loader).init();
     hardenBook(book); // book scripts never run (EPUB sections are untrusted HTML/JS)
+    parkSectionStylesheets(book); // blob: stylesheets are CSP-blocked; see epub-style-inline
 
     const foliate = document.createElement("foliate-view");
     // SECURITY: the fork's renderers forward this attribute to the
