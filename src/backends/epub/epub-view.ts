@@ -23,6 +23,7 @@ import type { Disposable } from "../../core/types";
 import { EPUB } from "foliate-js/epub.js";
 import "foliate-js/view.js";
 import type {
+  FoliateLoadDetail,
   FoliateLocation,
   FoliateTocItem,
   View as FoliateView,
@@ -221,6 +222,15 @@ export class MakiEpubView extends FileView {
     foliate.addEventListener("relocate", (event) => {
       this.onRelocate((event as CustomEvent<FoliateLocation>).detail, file.path);
     });
+    // Section iframes are separate documents, so keydown inside them never
+    // reaches Obsidian's keymap (which listens on the app window) — hotkeys
+    // like Cmd+P go dead while the book has focus. Relay each section's
+    // keydown to the view's own document. Section listeners die with their
+    // iframe, so no explicit cleanup is needed.
+    foliate.addEventListener("load", (event) => {
+      const { doc } = (event as CustomEvent<FoliateLoadDetail>).detail;
+      doc.addEventListener("keydown", (evt) => this.relayKeydown(evt));
+    });
 
     const adapter = new EpubViewerAdapter({ path: file.path, backend: "epub" }, foliate);
     await foliate.open(book);
@@ -266,6 +276,19 @@ export class MakiEpubView extends FileView {
     });
     // A book that never loads surfaces through acquire()'s timeout instead.
     this.ready.catch(() => undefined);
+  }
+
+  /** Re-dispatch a section-iframe keydown on the view's document so
+   * Obsidian's keymap sees it (`ownerDocument`, not `document`, to follow
+   * the view into popout windows). If Obsidian handles it as a hotkey,
+   * suppress the iframe's default too. */
+  private relayKeydown(evt: KeyboardEvent): void {
+    const target = this.containerEl.ownerDocument.body;
+    // The constructor reads the original event as its init dict, cloning
+    // key/code/modifiers.
+    const clone = new KeyboardEvent(evt.type, evt);
+    const proceed = target.dispatchEvent(clone);
+    if (!proceed || clone.defaultPrevented) evt.preventDefault();
   }
 
   // ---- chrome --------------------------------------------------------------
