@@ -29,6 +29,7 @@ import type {
   View as FoliateView,
 } from "foliate-js/view.js";
 import { hardenBook } from "./epub-security";
+import { SectionStyleInliner } from "./epub-style-inline";
 import { EpubViewerAdapter } from "./epub-viewer-adapter";
 import { makeVaultZipLoader, type VaultZipLoader } from "./vault-zip-loader";
 
@@ -227,9 +228,13 @@ export class MakiEpubView extends FileView {
     // like Cmd+P go dead while the book has focus. Relay each section's
     // keydown to the view's own document. Section listeners die with their
     // iframe, so no explicit cleanup is needed.
+    const styleInliner = new SectionStyleInliner();
     foliate.addEventListener("load", (event) => {
       const { doc } = (event as CustomEvent<FoliateLoadDetail>).detail;
       doc.addEventListener("keydown", (evt) => this.relayKeydown(evt));
+      // Obsidian's CSP blocks the sections' blob: stylesheet links; mirror
+      // them as inline <style> so books don't render unstyled.
+      void styleInliner.apply(doc);
     });
 
     const adapter = new EpubViewerAdapter({ path: file.path, backend: "epub" }, foliate);
