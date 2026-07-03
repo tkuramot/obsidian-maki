@@ -47,8 +47,16 @@ function waitForChild(component: PdfViewerComponentLike): Promise<PdfViewerChild
   });
 }
 
+/** What the integration layer injects into the provider. */
+export interface PdfProviderDeps {
+  /** Mount the shared toolbar color picker (FR-9.2) into a toolbar section. */
+  mountColorPicker(parent: HTMLElement): Disposable & { el: HTMLElement };
+}
+
 export class PdfViewerProvider implements ViewerProvider {
   readonly backend = "pdf" as const;
+
+  constructor(private readonly deps: PdfProviderDeps) {}
 
   canHandle(ref: DocumentRef): boolean {
     return ref.backend === "pdf" && ref.path.toLowerCase().endsWith(".pdf");
@@ -56,7 +64,7 @@ export class PdfViewerProvider implements ViewerProvider {
 
   setup(_ctx: PluginContext): Disposable {
     // Nothing to register: Obsidian's own view opens PDFs. In-viewer UI
-    // (toolbar palette, context menu) will patch here later.
+    // (context menu) will patch here later.
     return { dispose: () => {} };
   }
 
@@ -67,6 +75,22 @@ export class PdfViewerProvider implements ViewerProvider {
       throw new Error("Not a native PDF view (no `viewer` component)");
     }
     const child = await waitForChild(component);
-    return new PdfViewerAdapter(ref, view, child);
+    const adapter = new PdfViewerAdapter(ref, view, child);
+    this.injectColorPicker(view, adapter);
+    return adapter;
+  }
+
+  /**
+   * Add the color picker to the native toolbar. Version-guarded DOM
+   * injection: an absent/renamed toolbar degrades to no button.
+   */
+  private injectColorPicker(view: PdfViewLike, adapter: PdfViewerAdapter): void {
+    const toolbar = view.containerEl?.querySelector<HTMLElement>(".pdf-toolbar-right");
+    if (!toolbar) return;
+    // A stale button can survive a torn-down adapter if the view was reused.
+    toolbar.querySelectorAll(".maki-color-picker").forEach((el) => el.remove());
+    const picker = this.deps.mountColorPicker(toolbar);
+    toolbar.prepend(picker.el); // before the native right-side buttons
+    adapter.own(() => picker.dispose());
   }
 }

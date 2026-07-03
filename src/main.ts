@@ -19,9 +19,10 @@ import type { Codecs } from "./core/locator/codec";
 import { EpubLocatorCodec } from "./core/locator/epub-codec";
 import { PdfLocatorCodec } from "./core/locator/pdf-codec";
 import { TemplateEngine } from "./core/template-engine";
-import type { Color, HighlightId } from "./core/types";
+import type { Color, Disposable, HighlightId } from "./core/types";
 import { ViewerRegistry } from "./core/viewer-registry";
 import { ObsidianBacklinkIndex } from "./obsidian/backlink-index";
+import { mountColorPicker } from "./obsidian/color-picker";
 import { registerCommands } from "./obsidian/commands";
 import { SourceSuggestModal } from "./obsidian/modals";
 import { ObsidianNoteWriter } from "./obsidian/note-writer";
@@ -42,6 +43,8 @@ export default class MakiPlugin extends Plugin {
    */
   private readonly livePalette: Palette = {};
   private colors!: ColorModel;
+  /** Refresh hooks of the mounted toolbar color pickers (one per open viewer). */
+  private readonly pickerRefreshers = new Set<() => void>();
 
   annotations!: AnnotationService;
   reconciler!: HighlightReconciler;
@@ -62,8 +65,11 @@ export default class MakiPlugin extends Plugin {
 
     const registry = new ViewerRegistry();
     const providers = [
-      new PdfViewerProvider(),
+      new PdfViewerProvider({
+        mountColorPicker: (parent) => this.mountColorPicker(parent),
+      }),
       new EpubViewerProvider({
+        mountColorPicker: (parent) => this.mountColorPicker(parent),
         prefs: () => this.settings.epub,
         // updateSettings re-applies preferences to every open EPUB view.
         updatePrefs: (mutate) => void this.updateSettings((settings) => mutate(settings.epub)),
@@ -108,9 +114,10 @@ export default class MakiPlugin extends Plugin {
     mutate(this.settings);
     this.syncLivePalette();
     await this.saveData(this.settings);
-    // Colors / templates may have changed: re-project notes onto open viewers
-    // and re-style open books.
+    // Colors / templates may have changed: re-project notes onto open viewers,
+    // re-tint the toolbar pickers, and re-style open books.
     this.viewers.refreshAll();
+    for (const refresh of this.pickerRefreshers) refresh();
     for (const leaf of this.app.workspace.getLeavesOfType(MAKI_EPUB_VIEW_TYPE)) {
       if (leaf.view instanceof MakiEpubView) leaf.view.applyPreferences();
     }
@@ -119,6 +126,34 @@ export default class MakiPlugin extends Plugin {
   defaultColor(): Color {
     const first = Object.keys(this.livePalette)[0];
     return (first !== undefined ? this.colors?.fromName(first) : null) ?? FALLBACK_COLOR;
+  }
+
+  /** The toolbar-picked color the annotate commands use (FR-9.2). */
+  selectedColor(): Color {
+    return this.colors.fromName(this.settings.selectedColor) ?? this.defaultColor();
+  }
+
+  /**
+   * Mount a toolbar color picker bound to the persisted selection. One per
+   * open viewer; disposing unhooks it from settings refreshes.
+   */
+  mountColorPicker(parent: HTMLElement): Disposable & { el: HTMLElement } {
+    const handle = mountColorPicker(parent, {
+      colors: () => this.paletteColors(),
+      selected: () => this.selectedColor(),
+      select: (color) =>
+        void this.updateSettings((settings) => {
+          settings.selectedColor = color.name ?? "";
+        }),
+    });
+    this.pickerRefreshers.add(handle.refresh);
+    return {
+      el: handle.el,
+      dispose: () => {
+        this.pickerRefreshers.delete(handle.refresh);
+        handle.dispose();
+      },
+    };
   }
 
   paletteColors(): Color[] {

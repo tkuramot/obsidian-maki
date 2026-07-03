@@ -19,6 +19,7 @@ import {
 } from "obsidian";
 import { EpubLocatorCodec } from "../../core/locator/epub-codec";
 import { parseSubpath } from "../../core/locator/link";
+import type { Disposable } from "../../core/types";
 import { EPUB } from "foliate-js/epub.js";
 import "foliate-js/view.js";
 import type {
@@ -45,6 +46,8 @@ export interface EpubViewPreferences {
 
 /** What the integration layer injects into the view. */
 export interface EpubViewDeps {
+  /** Mount the shared toolbar color picker (FR-9.2) into a toolbar section. */
+  mountColorPicker(parent: HTMLElement): Disposable;
   prefs(): EpubViewPreferences;
   /** Persist a preference change (from the toolbar's display-options menu)
    * and re-apply preferences to every open EPUB view. */
@@ -65,6 +68,7 @@ export class MakiEpubView extends FileView {
   private pageInputEl: HTMLInputElement | null = null;
   private pageCountEl: HTMLElement | null = null;
   private chapterEl: HTMLElement | null = null;
+  private colorPicker: Disposable | null = null;
   private locationTotal = 0;
   private pendingSubpath: string | null = null;
 
@@ -193,6 +197,7 @@ export class MakiEpubView extends FileView {
     });
     this.pageCountEl = left.createSpan({ cls: "pdf-page-numbers" });
 
+    this.colorPicker = this.deps.mountColorPicker(right);
     this.chapterEl = right.createSpan({ cls: "maki-epub-chapter" });
 
     const bookEl = contentEl.createDiv({ cls: "maki-epub-book" });
@@ -246,6 +251,8 @@ export class MakiEpubView extends FileView {
     this.loader = null;
     this.toc = [];
     this.currentTocHref = null;
+    this.colorPicker?.dispose();
+    this.colorPicker = null;
     this.pageInputEl = null;
     this.pageCountEl = null;
     this.chapterEl = null;

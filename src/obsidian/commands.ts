@@ -37,7 +37,7 @@ export function registerCommands(plugin: MakiPlugin): void {
   plugin.addCommand({
     id: "copy-link-to-selection",
     name: "Copy link to selection",
-    callback: () => void annotate(plugin, plugin.defaultColor()),
+    callback: () => void annotate(plugin, plugin.selectedColor()),
   });
 
   plugin.addCommand({
@@ -55,7 +55,7 @@ export function registerCommands(plugin: MakiPlugin): void {
     name: "Copy link to selection with comment",
     callback: () => {
       new CommentModal(plugin.app, (comment) => {
-        void annotate(plugin, plugin.defaultColor(), comment);
+        void annotate(plugin, plugin.selectedColor(), comment);
       }).open();
     },
   });

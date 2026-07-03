@@ -29,6 +29,8 @@ export interface MakiSettings {
   /** Settings schema version — bump on breaking shape changes. */
   version: 1;
   palette: Palette;
+  /** Toolbar-picked highlight color (a palette name); "" = first palette color. */
+  selectedColor: string;
   snippetTemplate: string;
   displayTemplates: { pdf: string; epub: string };
   autoCopy: boolean;
@@ -43,6 +45,7 @@ export interface MakiSettings {
 export const DEFAULT_SETTINGS: MakiSettings = {
   version: 1,
   palette: { ...DEFAULT_PALETTE },
+  selectedColor: "",
   snippetTemplate: DEFAULT_ANNOTATION_SETTINGS.snippetTemplate,
   displayTemplates: { ...DEFAULT_ANNOTATION_SETTINGS.displayTemplates },
   autoCopy: true,

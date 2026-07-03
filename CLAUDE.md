@@ -20,11 +20,13 @@ to EPUB.
 adapter (`src/backends/epub/` — `maki-epub` view over foliate-js + `@zip.js/zip.js`),
 the Obsidian integration layer (`src/obsidian/` — `ObsidianBacklinkIndex`,
 `ObsidianNoteWriter`, `ViewerManager`, commands, settings) and the `src/main.ts`
-wiring all exist and build. foliate-js comes from the patched fork
+wiring all exist and build. The FR-9.2 toolbar color picker exists (built into the
+EPUB toolbar; DOM-injected into the native PDF toolbar — no monkey-patch).
+foliate-js comes from the patched fork
 [tkuramot/foliate-js](https://github.com/tkuramot/foliate-js) (`maki` branch), pinned
 as the **git submodule `vendor/foliate-js/`** — see "Toolchain" for the wiring and
-update flow. **Not yet implemented:** in-viewer UI (toolbar palette, context menus —
-FR-9.2/9.3, needs the monkey-patch route), highlight hover previews (FR-7.2), PDF
+update flow. **Not yet implemented:** in-viewer context menus (FR-9.3, needs the
+monkey-patch route), highlight hover previews (FR-7.2), PDF
 rectangular selection (FR-3.3), FR-10 (PDF embed), and manual verification in
 Obsidian itself.
 

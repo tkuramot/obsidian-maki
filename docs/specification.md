@@ -169,8 +169,9 @@ workflow, generalized so that PDF and EPUB behave the same way.
 - **FR-9.1** Commands: *Copy link to selection*, *Copy link to selection with
   comment*, *Start rectangular selection* (PDF), *Toggle auto-paste*, *Toggle
   auto-copy*.
-- **FR-9.2** A color palette in the preview toolbar; one click copies a colored link
-  to the current selection.
+- **FR-9.2** A color picker in the preview toolbar (PDF and EPUB alike). The picked
+  color is remembered (persisted in settings) and used by every subsequent
+  copy/auto-paste annotation action until picked again.
 - **FR-9.3** A right-click context menu in the preview offering the same actions.
 - **FR-9.4** Every action whose effect is not visible in place (copy to clipboard,
   auto-paste into a note in another pane, mode toggles) confirms itself with an

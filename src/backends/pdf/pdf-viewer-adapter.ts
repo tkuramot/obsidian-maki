@@ -87,6 +87,12 @@ export class PdfViewerAdapter implements DocumentViewer {
     }
   }
 
+  /** Tie an external binding (e.g. injected toolbar UI) to this viewer's lifetime. */
+  own(dispose: () => void): void {
+    if (this.destroyed) dispose();
+    else this.disposers.push(dispose);
+  }
+
   private containerEl(): HTMLElement | null {
     return this.child.containerEl ?? this.view.containerEl ?? null;
   }
