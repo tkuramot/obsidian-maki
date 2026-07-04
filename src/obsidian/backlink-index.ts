@@ -61,6 +61,10 @@ export class ObsidianBacklinkIndex {
     const { metadataCache, vault } = this.app;
     const refs: Array<[Events, EventRef]> = [
       [metadataCache, metadataCache.on("changed", (file) => touched(file.path))],
+      // "changed" fires before the link resolver updates `resolvedLinks`, so
+      // a note's *first* link to the document is invisible to `linksTo` at
+      // that point; "resolve" fires once resolution lands and closes the gap.
+      [metadataCache, metadataCache.on("resolve", (file) => touched(file.path))],
       [metadataCache, metadataCache.on("deleted", (file) => touched(file.path))],
       [
         vault,
