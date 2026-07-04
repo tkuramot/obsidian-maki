@@ -158,8 +158,7 @@ export default class MakiPlugin extends Plugin {
     this.savePositionsSoon.run(); // flush a pending reading-position save
   }
 
-  // ---- settings --------------------------------------------------------------
-
+  // ---- settings
   async updateSettings(mutate: (settings: MakiSettings) => void): Promise<void> {
     mutate(this.settings);
     this.syncLivePalette();
@@ -244,8 +243,7 @@ export default class MakiPlugin extends Plugin {
     };
   }
 
-  // ---- navigation -------------------------------------------------------------
-
+  // ---- navigation
   private openHighlightSources(viewer: DocumentViewer, id: HighlightId): void {
     const highlight = this.reconciler.getHighlight(viewer, id);
     if (!highlight || highlight.sources.length === 0) return;

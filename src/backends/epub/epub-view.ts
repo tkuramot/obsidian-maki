@@ -1,10 +1,9 @@
 /**
  * `MakiEpubView` — the plugin-owned `ItemView` hosting `<foliate-view>`.
- * Owns the reader chrome (mirroring the native PDF viewer's toolbar and
- * sidebar: sidebar toggle + TOC tree, prev/next, page input, font size,
- * display options), restores the reading
- * position, applies rendering preferences and theme follow, and hands the
- * adapter to the provider.
+ * Owns the reader chrome (mirroring the native PDF toolbar/sidebar: sidebar
+ * toggle + TOC tree, prev/next, page input, font size, display options),
+ * restores the reading position, applies rendering preferences and theme
+ * follow, and hands the adapter to the provider.
  * All humble — presentation of foliate state, no decisions.
  */
 
@@ -168,8 +167,7 @@ export class MakiEpubView extends FileView {
     renderer.setStyles?.(this.bookCss(prefs));
   }
 
-  // ---- mounting ------------------------------------------------------------
-
+  // ---- mounting
   private async mount(file: TFile): Promise<void> {
     this.teardown();
     const { contentEl } = this;
@@ -200,9 +198,8 @@ export class MakiEpubView extends FileView {
     setIcon(nextBtn, "lucide-chevron-right");
     setTooltip(nextBtn, "Next page");
 
-    // Font size controls, in the native toolbar's zoom-button slot (spacer,
-    // zoom-out, divider, zoom-in, right before the display-options chevron)
-    // and with its icons — font size is the reflowable analogue of zoom.
+    // Font size controls in the native toolbar's zoom-button slot, with its
+    // icons — font size is the reflowable analogue of zoom.
     left.createDiv({ cls: "pdf-toolbar-spacer" });
     this.fontDownEl = left.createDiv({ cls: "clickable-icon" });
     setIcon(this.fontDownEl, "lucide-zoom-out");
@@ -235,11 +232,10 @@ export class MakiEpubView extends FileView {
     this.colorPicker = this.deps.mountColorPicker(right);
     this.chapterEl = right.createSpan({ cls: "maki-epub-chapter" });
 
-    // The book area mirrors the native PDF viewer's sidebar DOM
-    // (.pdf-content-container > .pdf-viewer-container + .pdf-sidebar-container),
-    // so Obsidian's own styles drive the slide-in, the viewer shift, and the
-    // resizer — the sidebar hosts the TOC as a standard Obsidian tree, like
-    // the PDF outline view.
+    // Mirror the native PDF viewer's sidebar DOM
+    // (.pdf-content-container > .pdf-viewer-container + .pdf-sidebar-container)
+    // so Obsidian's styles drive the slide-in, viewer shift, and resizer; the
+    // sidebar hosts the TOC as a standard Obsidian tree.
     const bookHost = contentEl.createDiv({ cls: "maki-epub-book" });
     const content = bookHost.createDiv({ cls: "pdf-content-container" });
     // The width the native sidebar uses when showing the PDF outline.
@@ -354,8 +350,7 @@ export class MakiEpubView extends FileView {
     if (!proceed || clone.defaultPrevented) evt.preventDefault();
   }
 
-  // ---- chrome --------------------------------------------------------------
-
+  // ---- chrome
   private toggleSidebar(): void {
     this.sidebarOpen = !this.sidebarOpen;
     this.contentContainerEl?.toggleClass("sidebarOpen", this.sidebarOpen);
@@ -518,8 +513,7 @@ export class MakiEpubView extends FileView {
     }
   }
 
-  // ---- navigation from links -----------------------------------------------
-
+  // ---- navigation from links
   private async applySubpath(subpath: string): Promise<void> {
     const adapter = this.adapter;
     if (!adapter) return;
@@ -536,8 +530,7 @@ export class MakiEpubView extends FileView {
     }
   }
 
-  // ---- theme / preferences -------------------------------------------------
-
+  // ---- theme / preferences
   private bookCss(prefs: EpubViewPreferences): string {
     const isDark = document.body.classList.contains("theme-dark");
     const computed = getComputedStyle(this.containerEl);

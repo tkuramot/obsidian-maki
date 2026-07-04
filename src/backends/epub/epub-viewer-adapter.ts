@@ -129,8 +129,7 @@ export class EpubViewerAdapter implements DocumentViewer {
     );
   }
 
-  // ---- navigation ----------------------------------------------------------
-
+  // ---- navigation
   async reveal(target: Locator, opts?: { flash?: boolean }): Promise<RevealOutcome> {
     if (target.backend !== "epub") return "not-found";
     const value = wrapCfi(target.cfi);
@@ -166,8 +165,7 @@ export class EpubViewerAdapter implements DocumentViewer {
     });
   }
 
-  // ---- selection -----------------------------------------------------------
-
+  // ---- selection
   captureSelection(): TextSelection | null {
     return this.liveSelection() ?? this.remembered;
   }
@@ -215,8 +213,7 @@ export class EpubViewerAdapter implements DocumentViewer {
     return { dispose: () => this.dragCbs.delete(cb) };
   }
 
-  // ---- highlights ----------------------------------------------------------
-
+  // ---- highlights
   drawHighlight(h: Highlight): void {
     if (h.locator.backend !== "epub") return;
     const value = wrapCfi(h.locator.cfi);
@@ -268,8 +265,7 @@ export class EpubViewerAdapter implements DocumentViewer {
     }
   }
 
-  // ---- metadata / lifecycle ------------------------------------------------
-
+  // ---- metadata / lifecycle
   metadata(): DocumentMetadata {
     const meta: DocumentMetadata = {};
     const title = this.view.book?.metadata?.title;

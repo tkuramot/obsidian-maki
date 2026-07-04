@@ -92,9 +92,9 @@ export class PdfViewerAdapter implements DocumentViewer {
     }
 
     // Opening a `selection=` subpath makes Obsidian paint its own persistent
-    // text highlight — doubled up with Maki's for every annotation link.
-    // Suppress the native paint for ranges Maki draws; anything Maki does not
-    // draw keeps the native behavior. Instance wrap, no prototype patch.
+    // text highlight, doubling up with Maki's. Suppress the native paint for
+    // ranges Maki draws; others keep the native behavior. Instance wrap, no
+    // prototype patch.
     if (typeof this.child.highlightText === "function") {
       const adapter = this;
       this.disposers.push(
@@ -115,11 +115,10 @@ export class PdfViewerAdapter implements DocumentViewer {
     const container = this.containerEl();
     const doc = container?.ownerDocument;
     if (container && doc) {
-      // A vanished DOM selection is ambiguous: cleared by the user acting in
-      // the viewer, or stolen by another pane (the window shares one
-      // selection). Only pointerdown on a page counts as intent; everything
-      // else keeps `remembered` alive so annotate still works after the user
-      // focuses the note they want to paste into.
+      // A vanished DOM selection is ambiguous: cleared by the user, or stolen
+      // by another pane (the window shares one selection). Only pointerdown on
+      // a page counts as intent; else `remembered` stays alive so annotate
+      // still works after the user focuses the note to paste into.
       const onSelectionChange = (): void => {
         const live = this.liveSelection();
         if (!live) return;
@@ -164,8 +163,7 @@ export class PdfViewerAdapter implements DocumentViewer {
     return this.child.pdfViewer?.pdfViewer?.getPageView(pageNumber - 1) ?? null;
   }
 
-  // ---- navigation ----------------------------------------------------------
-
+  // ---- navigation
   async reveal(target: Locator, opts?: { flash?: boolean }): Promise<RevealOutcome> {
     if (target.backend !== "pdf") return "not-found";
     const pageCount = this.child.pdfViewer?.pdfViewer?.pagesCount ?? 0;
@@ -188,8 +186,7 @@ export class PdfViewerAdapter implements DocumentViewer {
     return "exact";
   }
 
-  // ---- selection -----------------------------------------------------------
-
+  // ---- selection
   captureSelection(): TextSelection | null {
     return this.liveSelection() ?? this.remembered;
   }
@@ -317,8 +314,7 @@ export class PdfViewerAdapter implements DocumentViewer {
     return [item, r.toString().length];
   }
 
-  // ---- highlights ----------------------------------------------------------
-
+  // ---- highlights
   drawHighlight(h: Highlight): void {
     if (h.locator.backend !== "pdf") return;
     this.highlights.set(h.id, h);
@@ -461,8 +457,7 @@ export class PdfViewerAdapter implements DocumentViewer {
     return promise;
   }
 
-  // ---- metadata / lifecycle ------------------------------------------------
-
+  // ---- metadata / lifecycle
   metadata(): DocumentMetadata {
     const meta: DocumentMetadata = {};
     const basename = this.ref.path.slice(this.ref.path.lastIndexOf("/") + 1);

@@ -93,21 +93,17 @@ function sameParams(a: SubpathParams, b: SubpathParams): boolean {
 }
 
 /**
- * Remove the annotation link matching `subpath` from note content
- * (delete-from-preview edits the source note; markdown stays the source of
- * truth). The decision logic is pure and lives here; `ObsidianNoteWriter`
- * only wraps it in `vault.process`.
+ * Remove the annotation link matching `subpath` from note content — the pure
+ * decision behind delete-from-preview; `ObsidianNoteWriter` only wraps it in
+ * `vault.process`. Tries the line hint first, then the whole content, so a
+ * stale hint still deletes the right link. Matching is key-order-insensitive.
+ * Returns the new content, or null when nothing matched (caller leaves the
+ * note untouched).
  *
- * The line hint (the indexed link's position) is tried first, then the whole
- * content, so a stale hint still deletes the right link. Matching is
- * key-order-insensitive over the parsed subpath. Returns the new content, or
- * null when no link matched (callers then leave the note untouched).
- *
- * Link boundaries follow Obsidian's own grammar (`/^(!?)\[\[(.+?)]]/` with
- * inner `[[` rejected): a link ends at the *first* `]]`, and the alias may
- * contain single brackets. An alias *ending* in `]` therefore keeps its last
- * bracket out of the link — exactly as Obsidian renders it — so deleting the
- * link leaves that stray bracket behind, matching what the user saw.
+ * Link boundaries follow Obsidian's grammar: a link ends at the *first* `]]`
+ * (inner `[[` rejected), and the alias may hold single brackets. An alias
+ * ending in `]` keeps that bracket out of the link, so deletion leaves the
+ * stray bracket behind — exactly as Obsidian renders it.
  */
 export function removeAnnotationLink(
   content: string,
