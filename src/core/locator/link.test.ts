@@ -4,6 +4,7 @@ import { EpubLocatorCodec } from "./epub-codec";
 import {
   buildLink,
   highlightIdFor,
+  parseAnnotationLink,
   parseSubpath,
   removeAnnotationLink,
   serializeSubpath,
@@ -130,5 +131,56 @@ describe("removeAnnotationLink (FR-7.3)", () => {
     expect(removeAnnotationLink(content, subpath)).toBe(
       " [[paper.pdf#page=9&rect=1,2,3,4]]",
     );
+  });
+
+  it("removes a link whose alias contains brackets (template-generated)", () => {
+    // Obsidian's grammar ends the link at the first `]]`, so an alias ending
+    // in `]` keeps its last bracket outside the link; deletion mirrors that.
+    const content =
+      "see [[paper.pdf#page=3&selection=4,0,5,20&color=yellow|paper [3]]] here";
+    expect(removeAnnotationLink(content, subpath)).toBe("see ] here");
+    const mid = "note [[paper.pdf#page=3&selection=4,0,5,20&color=yellow|p. [3] f.]] x";
+    expect(removeAnnotationLink(mid, subpath)).toBe("note  x");
+  });
+
+  it("deletes the link found elsewhere when the hint points at another line", () => {
+    // The whole point of the two-phase scan: a stale hint that lands on a
+    // real line with a *non-matching* link must not stop the deletion.
+    const content = [
+      "[[paper.pdf#page=9&rect=1,2,3,4]]",
+      "prose",
+      "[[paper.pdf#page=3&selection=4,0,5,20&color=yellow]]",
+    ].join("\n");
+    expect(removeAnnotationLink(content, subpath, 0)).toBe(
+      ["[[paper.pdf#page=9&rect=1,2,3,4]]", "prose", ""].join("\n"),
+    );
+  });
+
+  it("restarts at an inner [[ like Obsidian's parser", () => {
+    const content = "x [[not a link [[paper.pdf#page=3&selection=4,0,5,20&color=yellow]] y";
+    expect(removeAnnotationLink(content, subpath)).toBe("x [[not a link  y");
+  });
+});
+
+describe("parseAnnotationLink", () => {
+  it("classifies a subpath with params as an annotation and extracts the color", () => {
+    expect(parseAnnotationLink("paper.pdf#page=3&selection=4,0,5,20&color=yellow")).toEqual({
+      linkpath: "paper.pdf",
+      params: { page: "3", selection: "4,0,5,20", color: "yellow" },
+      color: "yellow",
+    });
+  });
+
+  it("omits color when the param is absent", () => {
+    expect(parseAnnotationLink("book.epub#epubcfi=/6/4!/2%3A0")).toEqual({
+      linkpath: "book.epub",
+      params: { epubcfi: "/6/4!/2%3A0" },
+    });
+  });
+
+  it("rejects plain file links and heading/block references", () => {
+    expect(parseAnnotationLink("paper.pdf")).toBeNull();
+    expect(parseAnnotationLink("note.md#Some heading")).toBeNull();
+    expect(parseAnnotationLink("note.md#^block-id")).toBeNull();
   });
 });

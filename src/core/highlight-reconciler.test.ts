@@ -136,6 +136,23 @@ describe("HighlightReconciler", () => {
     expect(viewer.calls[0]).toMatchObject({ op: "draw" });
   });
 
+  it("recolors and redraws when the color-winning source disappears", () => {
+    // Two notes on one locator: a.md (first in note-path order) wins with
+    // green. Removing a.md must flip the highlight to b.md's red — a redraw,
+    // not a silent keep of the stale color.
+    reconciler.reconcile(viewer, [
+      entry(page3, { path: "a.md", line: 5 }, "0,200,120"),
+      entry(page3, { path: "b.md", line: 2 }, "red"),
+    ]);
+    viewer.calls.length = 0;
+    reconciler.reconcile(viewer, [entry(page3, { path: "b.md", line: 2 }, "red")]);
+    expect(viewer.calls).toHaveLength(1);
+    expect(viewer.calls[0]).toMatchObject({ op: "draw" });
+    const highlight = [...viewer.highlights.values()][0]!;
+    expect(highlight.color.name).toBe("red");
+    expect(highlight.sources).toEqual([{ path: "b.md", line: 2 }]);
+  });
+
   it("redraws when a source note is added to an existing highlight", () => {
     reconciler.reconcile(viewer, [entry(page3, { path: "a.md", line: 1 })]);
     viewer.calls.length = 0;

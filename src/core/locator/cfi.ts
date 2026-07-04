@@ -40,6 +40,22 @@ export function decodeCfi(encoded: string): string | null {
   }
 }
 
+/**
+ * The spine-item index a CFI's first step addresses, or null when the CFI
+ * does not start with the conventional package step. Per the EPUB CFI spec,
+ * `/6` is the package document's spine element and the next step's number is
+ * twice the 1-based child position — so `/6/4…` addresses the second spine
+ * item, index 1. Used as the coarse fallback when the exact passage no
+ * longer resolves.
+ */
+export function spineSectionIndex(cfi: string): number | null {
+  const match = /^\/6\/(\d+)/.exec(cfi);
+  if (!match) return null;
+  const step = Number(match[1]);
+  if (step <= 0 || step % 2 !== 0) return null;
+  return step / 2 - 1;
+}
+
 /** Wrap a CFI body in the standard `epubcfi( … )` form for the backend. */
 export function wrapCfi(body: string): string {
   return `epubcfi(${body})`;

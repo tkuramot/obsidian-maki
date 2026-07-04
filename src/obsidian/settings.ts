@@ -6,7 +6,15 @@
 
 import { Notice, PluginSettingTab, Setting, setIcon, setTooltip } from "obsidian";
 import { DEFAULT_ANNOTATION_SETTINGS } from "../core/annotation-service";
-import { DEFAULT_PALETTE, type Palette } from "../core/color-model";
+import {
+  DEFAULT_PALETTE,
+  hexToRgb,
+  isValidPaletteName,
+  nextColorName,
+  renamePaletteColor,
+  rgbToHex,
+  type Palette,
+} from "../core/color-model";
 import type MakiPlugin from "../main";
 
 /** EPUB rendering preferences. No settings-tab UI — all of them are adjusted
@@ -53,34 +61,6 @@ export const DEFAULT_SETTINGS: MakiSettings = {
   },
   readingPositions: {},
 };
-
-/** Palette names end up in link subpaths (`color=<name>`, spec §6). */
-const PALETTE_NAME_PATTERN = /^[\w-]+$/;
-
-function rgbToHex(rgb: [number, number, number]): string {
-  return `#${rgb.map((n) => n.toString(16).padStart(2, "0")).join("")}`;
-}
-
-function hexToRgb(hex: string): [number, number, number] | null {
-  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
-  if (!match) return null;
-  return [parseInt(match[1]!, 16), parseInt(match[2]!, 16), parseInt(match[3]!, 16)];
-}
-
-/** Rename a palette key while keeping the display order of the entries. */
-function renamePaletteColor(palette: Palette, from: string, to: string): Palette {
-  const next: Palette = {};
-  for (const [name, rgb] of Object.entries(palette)) next[name === from ? to : name] = rgb;
-  return next;
-}
-
-/** First `color-N` not already taken. */
-function nextColorName(palette: Palette): string {
-  for (let n = 1; ; n++) {
-    const name = `color-${n}`;
-    if (!(name in palette)) return name;
-  }
-}
 
 export class MakiSettingTab extends PluginSettingTab {
   constructor(private readonly plugin: MakiPlugin) {
@@ -221,7 +201,7 @@ export class MakiSettingTab extends PluginSettingTab {
     nameInput.addEventListener("change", async () => {
       const next = nameInput.value.trim();
       if (next === currentName) return;
-      const invalid = !PALETTE_NAME_PATTERN.test(next);
+      const invalid = !isValidPaletteName(next);
       if (invalid || next in this.plugin.settings.palette) {
         new Notice(
           invalid

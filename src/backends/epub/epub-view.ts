@@ -48,6 +48,8 @@ export interface EpubViewPreferences {
 const FONT_SIZE_STEP = 10;
 const FONT_SIZE_MIN = 50;
 const FONT_SIZE_MAX = 200;
+const SIDEBAR_MIN_PX = 150;
+const SIDEBAR_MAX_FRACTION = 0.5;
 
 /** What the integration layer injects into the view. */
 export interface EpubViewDeps {
@@ -422,10 +424,14 @@ export class MakiEpubView extends FileView {
       const onMove = (move: PointerEvent): void => {
         const rect = container.getBoundingClientRect();
         const width = rtl ? rect.right - move.clientX : move.clientX - rect.left;
-        const clamped = Math.max(150, Math.min(width, rect.width / 2));
+        const clamped = Math.max(
+          SIDEBAR_MIN_PX,
+          Math.min(width, rect.width * SIDEBAR_MAX_FRACTION),
+        );
         container.style.setProperty("--sidebar-width", `${Math.round(clamped)}px`);
       };
       const onUp = (): void => {
+        resizer.releasePointerCapture(down.pointerId);
         container.removeClass("sidebarResizing");
         resizer.removeEventListener("pointermove", onMove);
         resizer.removeEventListener("pointerup", onUp);

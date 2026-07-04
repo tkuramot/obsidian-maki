@@ -7,6 +7,7 @@
 
 import { MarkdownView, type App, type WorkspaceLeaf } from "obsidian";
 import { removeAnnotationLink } from "../core/locator/link";
+import { insertionBlock } from "../core/note-insertion";
 import type { NoteRef, SubpathParams } from "../core/types";
 
 /** Desktop-only escape hatch; null on mobile, where the caller's error surfaces. */
@@ -76,7 +77,7 @@ export class ObsidianNoteWriter {
   private insertAtCursor(view: MarkdownView, text: string): void {
     const editor = view.editor;
     const cursor = editor.getCursor();
-    const block = cursor.ch === 0 ? `${text}\n` : `\n${text}\n`;
+    const block = insertionBlock(text, cursor.ch === 0);
     editor.replaceRange(block, cursor);
     editor.setCursor(editor.offsetToPos(editor.posToOffset(cursor) + block.length));
   }

@@ -15,6 +15,7 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "esbuild": "^0.24.0",
+    "jsdom": "^29.1.1",
     "obsidian": "^1.7.2",
     "obsidian-typings": "^6.19.0",
     "pdfjs-dist": "^6.1.200",

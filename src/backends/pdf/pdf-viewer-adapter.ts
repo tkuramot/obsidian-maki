@@ -14,9 +14,18 @@ import type {
   RevealOutcome,
 } from "../../core/document-viewer";
 import { around } from "monkey-around";
-import { PdfLocatorCodec } from "../../core/locator/pdf-codec";
+import {
+  isForwardTextRange,
+  parseSelectionEndpoints,
+  PdfLocatorCodec,
+} from "../../core/locator/pdf-codec";
 import { highlightIdFor, serializeSubpath } from "../../core/locator/link";
-import { selectionRects, type Rect, type TextItemBox } from "../../core/pdf-geometry";
+import {
+  selectionRects,
+  toItemBoxes,
+  type Rect,
+  type TextItemBox,
+} from "../../core/pdf-geometry";
 import type {
   Disposable,
   DocumentRef,
@@ -26,12 +35,7 @@ import type {
   TextSelection,
 } from "../../core/types";
 import { snapToTextEndpoints } from "../snap-range";
-import type {
-  PdfJsPageView,
-  PdfJsTextItem,
-  PdfViewerChildLike,
-  PdfViewLike,
-} from "./pdf-internals";
+import type { PdfJsPageView, PdfViewerChildLike, PdfViewLike } from "./pdf-internals";
 
 const OVERLAY_CLASS = "maki-pdf-annotation-layer";
 const HIGHLIGHT_CLASS = "maki-highlight";
@@ -45,15 +49,6 @@ function textDivsOf(pageView: PdfJsPageView | null): HTMLElement[] | null {
   const builder = pageView?.textLayer;
   if (!builder) return null;
   return (builder.textLayer ?? builder).textDivs ?? null;
-}
-
-/** getTextContent items → the pure-math boxes. */
-function toItemBoxes(items: readonly PdfJsTextItem[]): TextItemBox[] {
-  return items.map((item) => {
-    const x = item.transform[4] ?? 0;
-    const y = item.transform[5] ?? 0;
-    return { rect: [x, y, x + item.width, y + item.height] as Rect, text: item.str };
-  });
 }
 
 export class PdfViewerAdapter implements DocumentViewer {
@@ -249,14 +244,9 @@ export class PdfViewerAdapter implements DocumentViewer {
   ): [begin: [number, number], end: [number, number]] | null {
     if (typeof this.child.getTextSelectionRangeStr !== "function") return null;
     const str = this.child.getTextSelectionRangeStr(pageEl);
-    const parts = str ? str.split(",").map((part) => Number(part.trim())) : [];
-    if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0)) return null;
-    const [bi, bo, ei, eo] = parts as [number, number, number, number];
-    if (bi > ei || (bi === ei && bo >= eo)) return null;
-    return [
-      [bi, bo],
-      [ei, eo],
-    ];
+    const endpoints = str ? parseSelectionEndpoints(str) : null;
+    if (!endpoints || !isForwardTextRange(endpoints.begin, endpoints.end)) return null;
+    return [endpoints.begin, endpoints.end];
   }
 
   /** Fallback for older internals: resolve endpoints by walking `textDivs`. */
@@ -276,7 +266,7 @@ export class PdfViewerAdapter implements DocumentViewer {
       console.debug("Maki[pdf]: selection rejected — endpoint not in textDivs");
       return null;
     }
-    if (begin[0] > end[0] || (begin[0] === end[0] && begin[1] >= end[1])) return null;
+    if (!isForwardTextRange(begin, end)) return null;
     return [begin, end];
   }
 

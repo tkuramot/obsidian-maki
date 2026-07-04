@@ -9,7 +9,7 @@
  */
 
 import { debounce, TFile, type App, type EventRef, type Events } from "obsidian";
-import { parseSubpath } from "../core/locator/link";
+import { parseAnnotationLink } from "../core/locator/link";
 import type { BacklinkEntry, Disposable, DocumentRef } from "../core/types";
 
 const CHANGE_DEBOUNCE_MS = 250;
@@ -25,17 +25,16 @@ export class ObsidianBacklinkIndex {
       const cache = metadataCache.getCache(sourcePath);
       if (!cache) continue;
       for (const link of [...(cache.links ?? []), ...(cache.embeds ?? [])]) {
-        const hash = link.link.indexOf("#");
-        if (hash < 0) continue; // a plain file link is not an annotation
-        const dest = metadataCache.getFirstLinkpathDest(link.link.slice(0, hash), sourcePath);
+        // The classification (what makes a link an annotation) is the core's.
+        const parsed = parseAnnotationLink(link.link);
+        if (!parsed) continue;
+        const dest = metadataCache.getFirstLinkpathDest(parsed.linkpath, sourcePath);
         if (dest?.path !== ref.path) continue;
-        const params = parseSubpath(link.link.slice(hash + 1));
-        if (Object.keys(params).length === 0) continue;
         const entry: BacklinkEntry = {
-          subpath: params,
+          subpath: parsed.params,
           source: { path: sourcePath, line: link.position.start.line },
         };
-        if (params["color"] !== undefined) entry.color = params["color"];
+        if (parsed.color !== undefined) entry.color = parsed.color;
         entries.push(entry);
       }
     }

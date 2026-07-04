@@ -41,6 +41,16 @@ const IMPORT_PATTERN = /@import\s+(?:url\(\s*)?["']?(blob:[^"')\s]+)["']?\s*\)?\
 const MAX_IMPORT_DEPTH = 4;
 
 /**
+ * Rewrite a section document's blocked stylesheet links to the parked `rel`.
+ * Returns whether anything changed. Exported for its unit tests.
+ */
+export function parkStylesheetLinks(doc: Document): boolean {
+  const links = Array.from(doc.querySelectorAll(BLOCKED_LINKS));
+  for (const link of links) link.setAttribute("rel", PARKED_REL);
+  return links.length > 0;
+}
+
+/**
  * Park each section's blocked stylesheet links at transform time: with a
  * non-stylesheet `rel` the document never attempts the load, so nothing
  * hits the CSP. Wire this next to `hardenBook`, before `open()`.
@@ -54,11 +64,7 @@ export function parkSectionStylesheets(book: FoliateBook): void {
     const mediaType = detail.type;
     detail.data = Promise.resolve(detail.data).then((data) => {
       if (typeof data !== "string") return data;
-      return transformSectionHtml(data, mediaType, (doc) => {
-        const links = Array.from(doc.querySelectorAll(BLOCKED_LINKS));
-        for (const link of links) link.setAttribute("rel", PARKED_REL);
-        return links.length > 0;
-      });
+      return transformSectionHtml(data, mediaType, parkStylesheetLinks);
     });
   });
 }
@@ -96,26 +102,36 @@ export class SectionStyleInliner {
       pending = fetch(url).then((response) => response.text());
       this.cache.set(url, pending);
     }
-    return pending.then((css) => this.inlineImports(css, depth));
+    return pending.then((css) => inlineCssImports(css, (u, d) => this.load(u, d), depth));
   }
+}
 
-  /** `@import` of a blob: URL is equally blocked when inlined; recurse. */
-  private async inlineImports(css: string, depth: number): Promise<string> {
-    if (depth <= 0) return css;
-    const matches = [...css.matchAll(IMPORT_PATTERN)];
-    if (matches.length === 0) return css;
-    let result = "";
-    let last = 0;
-    for (const match of matches) {
-      const [statement, url] = match;
-      result += css.slice(last, match.index);
-      last = match.index + statement.length;
-      try {
-        result += await this.load(url!, depth - 1);
-      } catch {
-        result += statement; // keep the (dead) import rather than corrupt the sheet
-      }
+/**
+ * Replace each blob: `@import` with the css `load` resolves it to —
+ * `@import` of a blob: URL is equally blocked when inlined, so the loader
+ * recurses (bounded by `depth`). A failed load keeps the (dead) import
+ * statement rather than corrupt the sheet. Pure given `load`; exported for
+ * its unit tests.
+ */
+export async function inlineCssImports(
+  css: string,
+  load: (url: string, depth: number) => Promise<string>,
+  depth: number,
+): Promise<string> {
+  if (depth <= 0) return css;
+  const matches = [...css.matchAll(IMPORT_PATTERN)];
+  if (matches.length === 0) return css;
+  let result = "";
+  let last = 0;
+  for (const match of matches) {
+    const [statement, url] = match;
+    result += css.slice(last, match.index);
+    last = match.index + statement.length;
+    try {
+      result += await load(url!, depth - 1);
+    } catch {
+      result += statement; // keep the (dead) import rather than corrupt the sheet
     }
-    return result + css.slice(last);
   }
+  return result + css.slice(last);
 }

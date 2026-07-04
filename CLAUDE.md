@@ -127,10 +127,14 @@ These are easy to violate and expensive to get wrong:
 
 ## Toolchain
 
-**Node 22 + pnpm + TypeScript + esbuild**, with **Vitest** over `core/`. The Nix dev
-shell (`flake.nix`) provides `nodejs_22` and `pnpm`; enter it via `direnv` (an `.envrc`
-is present) or `nix develop`. The core has no DOM/Obsidian imports, so its tests run
-without a browser environment (`environment: "node"` in `vitest.config.ts`).
+**Node 22 + pnpm + TypeScript + esbuild**, with **Vitest** over `core/` plus the
+testable pieces of `backends/`. The Nix dev shell (`flake.nix`) provides `nodejs_22`
+and `pnpm`; enter it via `direnv` (an `.envrc` is present) or `nix develop`. The core
+has no DOM/Obsidian imports, so its tests run in plain node (`environment: "node"` in
+`vitest.config.ts`); DOM-dependent backend tests (snap-range, the EPUB section
+transforms) opt into jsdom per file via a `// @vitest-environment jsdom` docblock.
+`vitest.config.ts` resolves the `foliate-js` alias to the submodule, so backend tests
+exercise the real vendored code (e.g. `cfi-order.test.ts` runs foliate's `epubcfi.js`).
 
 Scripts:
 

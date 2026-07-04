@@ -20,7 +20,8 @@ import { SECTION_HTML_TYPES, transformSectionHtml } from "./section-transform";
 
 const CSP = "script-src 'none'";
 
-function injectCsp(source: string, mediaType: string): string {
+/** Exported for its unit tests; production code wires it via `hardenBook`. */
+export function injectCsp(source: string, mediaType: string): string {
   return transformSectionHtml(source, mediaType, (doc) => {
     const head = doc.querySelector("head");
     if (!head) return false;

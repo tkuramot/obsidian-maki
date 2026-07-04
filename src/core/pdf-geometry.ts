@@ -17,6 +17,27 @@ export interface TextItemBox {
   text: string;
 }
 
+/**
+ * The shape of a pdf.js `getTextContent()` item, reduced to what the math
+ * needs (structural — the adapter's `PdfJsTextItem` satisfies it).
+ */
+export interface PdfTextItemLike {
+  /** pdf.js transform matrix; indices 4/5 are the item origin. */
+  transform: readonly number[];
+  width: number;
+  height: number;
+  str: string;
+}
+
+/** getTextContent items → the boxes `selectionRects` consumes. */
+export function toItemBoxes(items: readonly PdfTextItemLike[]): TextItemBox[] {
+  return items.map((item) => {
+    const x = item.transform[4] ?? 0;
+    const y = item.transform[5] ?? 0;
+    return { rect: [x, y, x + item.width, y + item.height], text: item.str };
+  });
+}
+
 /** Tolerance for treating two rects as being on the same line. */
 const LINE_EPSILON = 0.5;
 

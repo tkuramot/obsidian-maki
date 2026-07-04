@@ -6,14 +6,12 @@
 
 import type { Locator, SubpathParams } from "../types";
 import { decodeCfi, encodeCfi } from "./cfi";
-import type { LocatorCodec } from "./codec";
+import { expectBackend, type LocatorCodec } from "./codec";
 
 export const EpubLocatorCodec: LocatorCodec = {
   encode(loc: Locator): SubpathParams {
-    if (loc.backend !== "epub") {
-      throw new Error(`EpubLocatorCodec cannot encode a '${loc.backend}' locator`);
-    }
-    return { epubcfi: encodeCfi(loc.cfi) };
+    const epub = expectBackend(loc, "epub", "EpubLocatorCodec");
+    return { epubcfi: encodeCfi(epub.cfi) };
   },
 
   decode(params: SubpathParams): Locator | null {

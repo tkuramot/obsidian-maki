@@ -4,7 +4,7 @@
  * core; this file only assembles and subscribes.
  */
 
-import { Plugin, type WorkspaceLeaf } from "obsidian";
+import { debounce, Plugin, type WorkspaceLeaf } from "obsidian";
 import { MakiEpubView, MAKI_EPUB_VIEW_TYPE } from "./backends/epub/epub-view";
 import { EpubViewerProvider } from "./backends/epub/epub-viewer-provider";
 import { PdfViewerProvider } from "./backends/pdf/pdf-viewer-provider";
@@ -12,7 +12,7 @@ import {
   AnnotationService,
   type AnnotationSettings,
 } from "./core/annotation-service";
-import { ColorModel, type Palette } from "./core/color-model";
+import { ColorModel, DEFAULT_PALETTE, type Palette } from "./core/color-model";
 import type { DocumentViewer } from "./core/document-viewer";
 import { HighlightReconciler } from "./core/highlight-reconciler";
 import type { Codecs } from "./core/locator/codec";
@@ -30,7 +30,11 @@ import { ObsidianNoteWriter } from "./obsidian/note-writer";
 import { DEFAULT_SETTINGS, MakiSettingTab, type MakiSettings } from "./obsidian/settings";
 import { openNoteAt, ViewerManager } from "./obsidian/viewer-manager";
 
-const FALLBACK_COLOR: Color = { name: "yellow", rgb: [255, 208, 0] };
+/** Used only when the user's palette is empty; tracks the default yellow. */
+const FALLBACK_COLOR: Color = { name: "yellow", rgb: [...DEFAULT_PALETTE["yellow"]!] };
+
+/** Reading positions update per page turn; batch the disk writes. */
+const POSITION_SAVE_MS = 1000;
 
 export default class MakiPlugin extends Plugin {
   // Narrows the base class's `settings?: unknown` (Obsidian ≥1.13).
@@ -46,6 +50,18 @@ export default class MakiPlugin extends Plugin {
   private colors!: ColorModel;
   /** Refresh hooks of the mounted toolbar color pickers (one per open viewer). */
   private readonly pickerRefreshers = new Set<() => void>();
+  /**
+   * Deferred save for reading-position updates: they carry no palette /
+   * template changes, so they skip `updateSettings`' reconcile-and-refresh
+   * but still funnel into the same `saveData` persistence.
+   */
+  private readonly savePositionsSoon = debounce(
+    () =>
+      void this.saveData(this.settings).catch((error: unknown) =>
+        console.error("Maki: could not save reading position", error),
+      ),
+    POSITION_SAVE_MS,
+  );
 
   annotations!: AnnotationService;
   reconciler!: HighlightReconciler;
@@ -77,7 +93,7 @@ export default class MakiPlugin extends Plugin {
         getPosition: (path) => this.settings.readingPositions[path],
         setPosition: (path, cfi) => {
           this.settings.readingPositions[path] = cfi;
-          void this.saveData(this.settings);
+          this.savePositionsSoon();
         },
       }),
     ];
@@ -139,6 +155,7 @@ export default class MakiPlugin extends Plugin {
 
   override onunload(): void {
     this.viewers.destroyAll();
+    this.savePositionsSoon.run(); // flush a pending reading-position save
   }
 
   // ---- settings --------------------------------------------------------------

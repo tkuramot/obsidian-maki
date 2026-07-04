@@ -10,6 +10,13 @@
 import type { DocumentRef, HighlightId, Locator, SubpathParams } from "../types";
 import type { LocatorCodec } from "./codec";
 
+/**
+ * The subpath key carrying the highlight color. Written by
+ * `AnnotationService` when a link is created and read back when links are
+ * projected as highlights — part of the persisted contract.
+ */
+export const COLOR_PARAM_KEY = "color";
+
 /** `{page: "3", selection: "4,0,5,20"}` → `page=3&selection=4,0,5,20`. */
 export function serializeSubpath(params: SubpathParams): string {
   return Object.entries(params)
@@ -54,6 +61,31 @@ export function highlightIdFor(loc: Locator, codec: LocatorCodec): HighlightId {
   return `${loc.backend}:${serializeSubpath(codec.encode(loc))}`;
 }
 
+/** The annotation-relevant parts of a raw link target (`path#subpath`). */
+export interface AnnotationLinkTarget {
+  /** The link path before `#`, still unresolved (resolution is Obsidian's). */
+  linkpath: string;
+  params: SubpathParams;
+  /** The `color` param, when present. */
+  color?: string;
+}
+
+/**
+ * Classify a raw link target as an annotation link: it must carry a subpath
+ * with at least one `key=value` param. Returns null for plain file links and
+ * heading/block references — those are not annotations.
+ */
+export function parseAnnotationLink(rawLink: string): AnnotationLinkTarget | null {
+  const hash = rawLink.indexOf("#");
+  if (hash < 0) return null;
+  const params = parseSubpath(rawLink.slice(hash + 1));
+  if (Object.keys(params).length === 0) return null;
+  const target: AnnotationLinkTarget = { linkpath: rawLink.slice(0, hash), params };
+  const color = params[COLOR_PARAM_KEY];
+  if (color !== undefined) target.color = color;
+  return target;
+}
+
 /** Key-order-insensitive equality of two subpath maps. */
 function sameParams(a: SubpathParams, b: SubpathParams): boolean {
   const aKeys = Object.keys(a);
@@ -70,6 +102,12 @@ function sameParams(a: SubpathParams, b: SubpathParams): boolean {
  * content, so a stale hint still deletes the right link. Matching is
  * key-order-insensitive over the parsed subpath. Returns the new content, or
  * null when no link matched (callers then leave the note untouched).
+ *
+ * Link boundaries follow Obsidian's own grammar (`/^(!?)\[\[(.+?)]]/` with
+ * inner `[[` rejected): a link ends at the *first* `]]`, and the alias may
+ * contain single brackets. An alias *ending* in `]` therefore keeps its last
+ * bracket out of the link — exactly as Obsidian renders it — so deleting the
+ * link leaves that stray bracket behind, matching what the user saw.
  */
 export function removeAnnotationLink(
   content: string,
@@ -77,22 +115,31 @@ export function removeAnnotationLink(
   lineHint?: number,
 ): string | null {
   const lines = content.split("\n");
-  const wikilink = /!?\[\[([^\[\]]+)\]\]/g;
 
   const removeFrom = (index: number): boolean => {
     const line = lines[index];
     if (line === undefined) return false;
-    for (const match of line.matchAll(wikilink)) {
-      const inner = match[1]!;
+    let cursor = 0;
+    while (true) {
+      const open = line.indexOf("[[", cursor);
+      if (open < 0) return false;
+      const close = line.indexOf("]]", open + 2);
+      if (close < 0) return false;
+      const inner = line.slice(open + 2, close);
+      if (inner.includes("[[")) {
+        cursor = open + 2; // like Obsidian, restart at the inner bracket
+        continue;
+      }
+      cursor = close + 2;
       const pipe = inner.indexOf("|");
       const target = pipe >= 0 ? inner.slice(0, pipe) : inner;
       const hash = target.indexOf("#");
       if (hash < 0) continue;
       if (!sameParams(parseSubpath(target.slice(hash + 1)), subpath)) continue;
-      lines[index] = line.slice(0, match.index) + line.slice(match.index + match[0].length);
+      const start = open > 0 && line[open - 1] === "!" ? open - 1 : open; // embed prefix
+      lines[index] = line.slice(0, start) + line.slice(close + 2);
       return true;
     }
-    return false;
   };
 
   if (lineHint !== undefined && removeFrom(lineHint)) return lines.join("\n");

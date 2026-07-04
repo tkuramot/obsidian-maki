@@ -5,7 +5,7 @@
  */
 
 import type { Locator, PdfLocator, SubpathParams } from "../types";
-import type { LocatorCodec } from "./codec";
+import { expectBackend, type LocatorCodec } from "./codec";
 
 /** Strict integer parse: the whole string must be a base-10 integer. */
 function parseInteger(value: string): number | null {
@@ -21,11 +21,36 @@ function parseNumber(value: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function parseSelection(value: string): PdfLocator["target"] | null {
-  const parts = value.split(",").map(parseInteger);
+/** A text selection's `(item index, char offset)` endpoint pair. */
+export interface SelectionEndpoints {
+  begin: [item: number, offset: number];
+  end: [item: number, offset: number];
+}
+
+/**
+ * Parse the native `selection=` value — `beginItem,beginOffset,endItem,endOffset`,
+ * four non-negative integers (Obsidian's own convention). Order is *not*
+ * validated: an inverted persisted selection still decodes (it just draws
+ * nothing); live capture rejects it via `isForwardTextRange` instead.
+ */
+export function parseSelectionEndpoints(value: string): SelectionEndpoints | null {
+  const parts = value.split(",").map((part) => parseInteger(part.trim()));
   if (parts.length !== 4 || parts.some((p) => p === null || p < 0)) return null;
-  const [beginItem, beginOffset, endItem, endOffset] = parts as [number, number, number, number];
-  return { kind: "text", begin: [beginItem, beginOffset], end: [endItem, endOffset] };
+  const [bi, bo, ei, eo] = parts as [number, number, number, number];
+  return { begin: [bi, bo], end: [ei, eo] };
+}
+
+/** Whether `begin` addresses a position strictly before `end` (a non-collapsed forward range). */
+export function isForwardTextRange(
+  begin: [item: number, offset: number],
+  end: [item: number, offset: number],
+): boolean {
+  return begin[0] < end[0] || (begin[0] === end[0] && begin[1] < end[1]);
+}
+
+function parseSelection(value: string): PdfLocator["target"] | null {
+  const endpoints = parseSelectionEndpoints(value);
+  return endpoints ? { kind: "text", begin: endpoints.begin, end: endpoints.end } : null;
 }
 
 function parseRect(value: string): PdfLocator["target"] | null {
@@ -36,21 +61,19 @@ function parseRect(value: string): PdfLocator["target"] | null {
 
 export const PdfLocatorCodec: LocatorCodec = {
   encode(loc: Locator): SubpathParams {
-    if (loc.backend !== "pdf") {
-      throw new Error(`PdfLocatorCodec cannot encode a '${loc.backend}' locator`);
-    }
+    const pdf = expectBackend(loc, "pdf", "PdfLocatorCodec");
     // Insertion order defines the serialized key order: page first, then the
     // target key, matching the spec's golden examples.
-    const params: SubpathParams = { page: String(loc.page) };
-    switch (loc.target.kind) {
+    const params: SubpathParams = { page: String(pdf.page) };
+    switch (pdf.target.kind) {
       case "text":
-        params["selection"] = [...loc.target.begin, ...loc.target.end].join(",");
+        params["selection"] = [...pdf.target.begin, ...pdf.target.end].join(",");
         break;
       case "rect":
-        params["rect"] = loc.target.rect.join(",");
+        params["rect"] = pdf.target.rect.join(",");
         break;
       case "annotation":
-        params["annotation"] = loc.target.id;
+        params["annotation"] = pdf.target.id;
         break;
     }
     return params;
@@ -60,6 +83,10 @@ export const PdfLocatorCodec: LocatorCodec = {
     const page = params["page"] !== undefined ? parseInteger(params["page"]) : null;
     if (page === null || page < 1) return null;
 
+    // Target keys take strict precedence (selection > rect > annotation): a
+    // link should carry exactly one target, so a *present but malformed*
+    // higher-precedence key means the whole locator is undecodable — it never
+    // falls through to a lower-precedence key.
     let target: PdfLocator["target"] | null = null;
     if (params["selection"] !== undefined) {
       target = parseSelection(params["selection"]);

@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Locator, PdfLocator } from "../types";
 import { describeCodecContract } from "./codec-contract";
-import { PdfLocatorCodec } from "./pdf-codec";
+import {
+  isForwardTextRange,
+  parseSelectionEndpoints,
+  PdfLocatorCodec,
+} from "./pdf-codec";
 
 const textLocator: PdfLocator = {
   backend: "pdf",
@@ -100,5 +104,49 @@ describe("PdfLocatorCodec.decode", () => {
   it("returns null when the page has no target (page-only subpath)", () => {
     expect(PdfLocatorCodec.decode({ page: "3" })).toBeNull();
     expect(PdfLocatorCodec.decode({ page: "3", annotation: "" })).toBeNull();
+  });
+
+  it("never falls through a malformed higher-precedence target key", () => {
+    // A present-but-broken `selection` means the locator is undecodable,
+    // even when a valid lower-precedence key is also present.
+    expect(
+      PdfLocatorCodec.decode({ page: "3", selection: "bad", rect: "1,2,3,4" }),
+    ).toBeNull();
+    expect(
+      PdfLocatorCodec.decode({ page: "3", rect: "bad", annotation: "1R" }),
+    ).toBeNull();
+  });
+});
+
+describe("parseSelectionEndpoints", () => {
+  it("parses the native four-integer value, tolerating spaces", () => {
+    expect(parseSelectionEndpoints("4,0,5,20")).toEqual({ begin: [4, 0], end: [5, 20] });
+    expect(parseSelectionEndpoints("4, 0, 5, 20")).toEqual({ begin: [4, 0], end: [5, 20] });
+  });
+
+  it("rejects wrong arity, non-integers, and negatives", () => {
+    expect(parseSelectionEndpoints("4,0,5")).toBeNull();
+    expect(parseSelectionEndpoints("4,0,5,20,1")).toBeNull();
+    expect(parseSelectionEndpoints("4,0,5,x")).toBeNull();
+    expect(parseSelectionEndpoints("4,0,5,2.5")).toBeNull();
+    expect(parseSelectionEndpoints("4,0,-5,20")).toBeNull();
+    expect(parseSelectionEndpoints("")).toBeNull();
+  });
+
+  it("does not validate endpoint order (an inverted value still parses)", () => {
+    expect(parseSelectionEndpoints("5,20,4,0")).toEqual({ begin: [5, 20], end: [4, 0] });
+  });
+});
+
+describe("isForwardTextRange", () => {
+  it("accepts strictly forward ranges", () => {
+    expect(isForwardTextRange([4, 0], [5, 20])).toBe(true);
+    expect(isForwardTextRange([4, 0], [4, 1])).toBe(true);
+  });
+
+  it("rejects collapsed and inverted ranges", () => {
+    expect(isForwardTextRange([4, 5], [4, 5])).toBe(false);
+    expect(isForwardTextRange([4, 5], [4, 0])).toBe(false);
+    expect(isForwardTextRange([5, 0], [4, 20])).toBe(false);
   });
 });

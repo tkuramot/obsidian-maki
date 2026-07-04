@@ -9,7 +9,7 @@
 import { ColorModel } from "./color-model";
 import type { DocumentViewer } from "./document-viewer";
 import type { Codecs } from "./locator/codec";
-import { buildLink } from "./locator/link";
+import { buildLink, COLOR_PARAM_KEY } from "./locator/link";
 import { TemplateEngine, type TemplateVariables } from "./template-engine";
 import type { BackendId, Color, TextSelection } from "./types";
 
@@ -119,7 +119,7 @@ export class AnnotationService {
 
     const params = {
       ...codecs[sel.locator.backend].encode(sel.locator),
-      color: colors.serialize(color),
+      [COLOR_PARAM_KEY]: colors.serialize(color),
     };
     const vars = buildVariables(viewer, sel, color, colors, comment);
     const display = templates.expand(s.displayTemplates[sel.locator.backend], vars);

@@ -16,6 +16,41 @@ export const DEFAULT_PALETTE: Palette = {
   blue: [84, 155, 255],
 };
 
+/**
+ * Palette names end up in link subpaths (`color=<name>`, spec §6), so they
+ * are restricted to characters that survive there unescaped.
+ */
+export function isValidPaletteName(name: string): boolean {
+  return /^[\w-]+$/.test(name);
+}
+
+/** `[255, 208, 0]` → `#ffd000` (the native color input's value format). */
+export function rgbToHex(rgb: [number, number, number]): string {
+  return `#${rgb.map((n) => n.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** `#ffd000` → `[255, 208, 0]`; null for anything but a 6-digit hex color. */
+export function hexToRgb(hex: string): [number, number, number] | null {
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!match) return null;
+  return [parseInt(match[1]!, 16), parseInt(match[2]!, 16), parseInt(match[3]!, 16)];
+}
+
+/** Rename a palette key while keeping the display order of the entries. */
+export function renamePaletteColor(palette: Palette, from: string, to: string): Palette {
+  const next: Palette = {};
+  for (const [name, rgb] of Object.entries(palette)) next[name === from ? to : name] = rgb;
+  return next;
+}
+
+/** First `color-N` not already taken. */
+export function nextColorName(palette: Palette): string {
+  for (let n = 1; ; n++) {
+    const name = `color-${n}`;
+    if (!(name in palette)) return name;
+  }
+}
+
 function parseChannel(value: string): number | null {
   if (!/^\d+$/.test(value)) return null;
   const n = Number(value);

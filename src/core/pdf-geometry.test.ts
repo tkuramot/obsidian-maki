@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeRects, selectionRects, type TextItemBox } from "./pdf-geometry";
+import { mergeRects, selectionRects, toItemBoxes, type TextItemBox } from "./pdf-geometry";
 
 /** A fixture line of two 100-wide items, then a second line below. */
 const items: TextItemBox[] = [
@@ -93,6 +93,22 @@ describe("mergeRects", () => {
     expect(input).toEqual([
       [0, 700, 50, 712],
       [50, 700, 90, 712],
+    ]);
+  });
+});
+
+describe("toItemBoxes", () => {
+  it("reads the item origin from transform[4]/[5] and spans width/height", () => {
+    expect(
+      toItemBoxes([
+        { transform: [12, 0, 0, 12, 72, 700], width: 100, height: 12, str: "hello" },
+      ]),
+    ).toEqual([{ rect: [72, 700, 172, 712], text: "hello" }]);
+  });
+
+  it("defaults a missing origin to 0 (defensive against truncated matrices)", () => {
+    expect(toItemBoxes([{ transform: [], width: 10, height: 5, str: "x" }])).toEqual([
+      { rect: [0, 0, 10, 5], text: "x" },
     ]);
   });
 });

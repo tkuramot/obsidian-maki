@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeCfi, encodeCfi, unwrapCfi, wrapCfi } from "./cfi";
+import { decodeCfi, encodeCfi, spineSectionIndex, unwrapCfi, wrapCfi } from "./cfi";
 
 describe("encodeCfi", () => {
   it("matches the spec §6.4 golden example", () => {
@@ -24,6 +24,9 @@ describe("decodeCfi", () => {
     const bodies = [
       "/6/14[chap05]!/4/2/2,/1:0,/1:280",
       "/6/4[id-with-%percent]!/2:5",
+      // a raw %HH sequence — the case an encoder that forgot to escape `%`
+      // would double-decode and corrupt.
+      "/6/4[a%41b]!/2:0",
       "/2[章タイトル]!/4:0", // non-ASCII ids pass through raw
       "",
     ];
@@ -35,6 +38,22 @@ describe("decodeCfi", () => {
   it("returns null on malformed percent-encoding instead of throwing", () => {
     expect(decodeCfi("/6/4%ZZ")).toBeNull();
     expect(decodeCfi("/6/4%")).toBeNull();
+  });
+});
+
+describe("spineSectionIndex", () => {
+  it("maps the conventional /6/N package step to a 0-based spine index", () => {
+    expect(spineSectionIndex("/6/2!/4:0")).toBe(0);
+    expect(spineSectionIndex("/6/4!/2:0")).toBe(1);
+    expect(spineSectionIndex("/6/14[chap05]!/4/2/2,/1:0,/1:280")).toBe(6);
+  });
+
+  it("returns null for CFIs that do not start with a valid spine step", () => {
+    expect(spineSectionIndex("/4/2!/6:0")).toBeNull(); // not the package's /6
+    expect(spineSectionIndex("/6/3!/2:0")).toBeNull(); // odd step ⇒ not an element
+    expect(spineSectionIndex("/6/0!/2:0")).toBeNull(); // step 0 ⇒ no such child
+    expect(spineSectionIndex("garbage")).toBeNull();
+    expect(spineSectionIndex("")).toBeNull();
   });
 });
 

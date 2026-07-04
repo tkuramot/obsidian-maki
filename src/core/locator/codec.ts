@@ -24,3 +24,19 @@ export type LocatorCodec = {
 
 /** How the core selects a codec: one value per backend. */
 export type Codecs = Record<BackendId, LocatorCodec>;
+
+/**
+ * Encode-side guard shared by all codecs: a codec handed a foreign backend's
+ * locator is a programming error (decode, by contrast, returns null — links
+ * are data and must never throw).
+ */
+export function expectBackend<B extends BackendId>(
+  loc: Locator,
+  backend: B,
+  codecName: string,
+): Extract<Locator, { backend: B }> {
+  if (loc.backend !== backend) {
+    throw new Error(`${codecName} cannot encode a '${loc.backend}' locator`);
+  }
+  return loc as Extract<Locator, { backend: B }>;
+}

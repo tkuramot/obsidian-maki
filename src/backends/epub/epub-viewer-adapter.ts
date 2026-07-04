@@ -13,7 +13,7 @@ import type {
   DocumentViewer,
   RevealOutcome,
 } from "../../core/document-viewer";
-import { unwrapCfi, wrapCfi } from "../../core/locator/cfi";
+import { spineSectionIndex, unwrapCfi, wrapCfi } from "../../core/locator/cfi";
 import type {
   Disposable,
   DocumentRef,
@@ -22,7 +22,6 @@ import type {
   Locator,
   TextSelection,
 } from "../../core/types";
-import { collapse, compare } from "foliate-js/epubcfi.js";
 import { Overlayer } from "foliate-js/overlayer.js";
 import type {
   FoliateDrawAnnotationDetail,
@@ -30,24 +29,17 @@ import type {
   FoliateShowAnnotationDetail,
   View as FoliateView,
 } from "foliate-js/view.js";
+import { isInvertedRangeCfi } from "./cfi-order";
 import { snapToTextEndpoints } from "../snap-range";
 
+/**
+ * Numeric, unlike the PDF backend's `var(--maki-highlight-opacity, 0.5)`:
+ * foliate applies the color as an SVG `fill` *attribute*, where `var()`
+ * never resolves. Keep the value in sync with the PDF default.
+ */
 const HIGHLIGHT_OPACITY = 0.5;
 const FLASH_VALUE_COLOR = "rgba(255, 208, 0, 0.5)";
 const FLASH_MS = 1200;
-
-/**
- * A range CFI whose start sorts after its end can only resolve to a collapsed
- * DOM range, so it silently draws nothing; refuse it instead — both before
- * persisting (captureSelection) and when drawing links that already carry one.
- */
-function isInvertedRangeCfi(cfi: string): boolean {
-  try {
-    return compare(collapse(cfi), collapse(cfi, true)) > 0;
-  } catch {
-    return true; // unparseable ⇒ equally undrawable
-  }
-}
 
 export class EpubViewerAdapter implements DocumentViewer {
   readonly backend = "epub" as const;
@@ -153,9 +145,8 @@ export class EpubViewerAdapter implements DocumentViewer {
     }
     // the exact passage no longer resolves — fall back to the
     // section addressed by the CFI's first spine step (/6/N).
-    const spineStep = /^\/6\/(\d+)/.exec(target.cfi);
-    const index = spineStep ? Number(spineStep[1]) / 2 - 1 : -1;
-    if (Number.isInteger(index) && index >= 0 && index < this.view.book.sections.length) {
+    const index = spineSectionIndex(target.cfi);
+    if (index !== null && index < this.view.book.sections.length) {
       try {
         if (await this.view.goTo(index)) return "fallback";
       } catch {

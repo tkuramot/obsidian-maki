@@ -9,6 +9,7 @@
  */
 
 import { Notice, TFile, type App, type FileView, type WorkspaceLeaf } from "obsidian";
+import { MAKI_EPUB_VIEW_TYPE } from "../backends/epub/epub-view";
 import type { DocumentViewer } from "../core/document-viewer";
 import type { HighlightReconciler } from "../core/highlight-reconciler";
 import type { BackendId, Disposable, DocumentRef, NoteRef } from "../core/types";
@@ -18,7 +19,7 @@ import type { ObsidianBacklinkIndex } from "./backlink-index";
 /** View types that host an annotatable document, by backend. */
 const VIEW_TYPES: Record<string, BackendId> = {
   pdf: "pdf",
-  "maki-epub": "epub",
+  [MAKI_EPUB_VIEW_TYPE]: "epub",
 };
 
 interface OpenEntry {
@@ -89,8 +90,7 @@ export class ViewerManager {
 
   /** Re-run reconcile for every open viewer (e.g. after a palette change). */
   refreshAll(): void {
-    for (const [leaf, entry] of this.open) {
-      void leaf;
+    for (const entry of this.open.values()) {
       this.reconcile(entry, { path: entry.path, backend: entry.viewer.backend });
     }
   }
