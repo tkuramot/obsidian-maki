@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { mergeRects, selectionRects, toItemBoxes, type TextItemBox } from "./pdf-geometry";
+import {
+  mergeRects,
+  selectionRects,
+  toItemBoxes,
+  type TextItemBox,
+} from "./pdf-geometry";
 
 /** A fixture line of two 100-wide items, then a second line below. */
 const items: TextItemBox[] = [

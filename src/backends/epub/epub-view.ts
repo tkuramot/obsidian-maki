@@ -14,7 +14,7 @@ import {
   Notice,
   setIcon,
   setTooltip,
-  TFile,
+  type TFile,
   type WorkspaceLeaf,
 } from "obsidian";
 import { EpubLocatorCodec } from "../../core/locator/epub-codec";
@@ -364,7 +364,10 @@ export class MakiEpubView extends FileView {
     this.tocSelfEls.clear();
     this.activeTocSelfEl = null;
     if (this.toc.length === 0) {
-      container.createDiv({ cls: "maki-epub-outline-empty", text: "No table of contents" });
+      container.createDiv({
+        cls: "maki-epub-outline-empty",
+        text: "No table of contents",
+      });
       return;
     }
     const addItems = (parent: HTMLElement, items: FoliateTocItem[]): void => {
@@ -390,7 +393,8 @@ export class MakiEpubView extends FileView {
           this.tocSelfEls.set(href, self);
           self.addEventListener("click", () => void this.foliate?.goTo(href));
         }
-        if (children.length > 0) addItems(item.createDiv({ cls: "tree-item-children" }), children);
+        if (children.length > 0)
+          addItems(item.createDiv({ cls: "tree-item-children" }), children);
       }
     };
     addItems(container, this.toc);
@@ -478,7 +482,13 @@ export class MakiEpubView extends FileView {
   /** Drop a menu under a toolbar button, as the native PDF toolbar does. */
   private showBelow(menu: Menu, anchor: HTMLElement): void {
     const rect = anchor.getBoundingClientRect();
-    menu.showAtPosition({ x: rect.x, y: rect.bottom, width: rect.width, overlap: true, left: false });
+    menu.showAtPosition({
+      x: rect.x,
+      y: rect.bottom,
+      width: rect.width,
+      overlap: true,
+      left: false,
+    });
   }
 
   /** Jump to a 1-based "page" (a foliate location) typed into the page input. */

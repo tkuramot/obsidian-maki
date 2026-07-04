@@ -31,7 +31,10 @@ function label(color: Color): string {
 }
 
 /** Mount the picker button into a toolbar section. */
-export function mountColorPicker(parent: HTMLElement, deps: ColorPickerDeps): ColorPickerHandle {
+export function mountColorPicker(
+  parent: HTMLElement,
+  deps: ColorPickerDeps,
+): ColorPickerHandle {
   const button = parent.createDiv({ cls: "clickable-icon maki-color-picker" });
   // A filled circle reads as "current color" better than a tinted icon.
   const dot = button.createDiv({ cls: "maki-color-picker-dot" });
@@ -65,7 +68,13 @@ export function mountColorPicker(parent: HTMLElement, deps: ColorPickerDeps): Co
     }
     // Drop the menu under the button, as the native PDF toolbar does.
     const rect = button.getBoundingClientRect();
-    menu.showAtPosition({ x: rect.x, y: rect.bottom, width: rect.width, overlap: true, left: false });
+    menu.showAtPosition({
+      x: rect.x,
+      y: rect.bottom,
+      width: rect.width,
+      overlap: true,
+      left: false,
+    });
   });
 
   return { el: button, refresh, dispose: () => button.remove() };

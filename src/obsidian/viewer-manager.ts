@@ -99,7 +99,11 @@ export class ViewerManager {
     for (const leaf of [...this.open.keys()]) this.teardown(leaf);
   }
 
-  private async attach(leaf: WorkspaceLeaf, file: TFile, backend: BackendId): Promise<void> {
+  private async attach(
+    leaf: WorkspaceLeaf,
+    file: TFile,
+    backend: BackendId,
+  ): Promise<void> {
     if (this.attaching.has(leaf)) return;
     const ref: DocumentRef = { path: file.path, backend };
     const provider = this.registry.providerFor(ref);

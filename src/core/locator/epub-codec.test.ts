@@ -13,10 +13,7 @@ const pointLocator: EpubLocator = {
   cfi: "/6/4!/2:0",
 };
 
-describeCodecContract("EpubLocatorCodec", EpubLocatorCodec, [
-  rangeLocator,
-  pointLocator,
-]);
+describeCodecContract("EpubLocatorCodec", EpubLocatorCodec, [rangeLocator, pointLocator]);
 
 describe("EpubLocatorCodec.encode", () => {
   it("produces the spec §6.4 golden value", () => {

@@ -31,7 +31,8 @@ const PARKED_REL = "maki-stylesheet";
  * blob: stylesheet links, minus alternate stylesheets (off by default —
  * mirroring one as `<style>` would wrongly always apply it).
  */
-const BLOCKED_LINKS = 'link[rel~="stylesheet" i][href^="blob:"]:not([rel~="alternate" i])';
+const BLOCKED_LINKS =
+  'link[rel~="stylesheet" i][href^="blob:"]:not([rel~="alternate" i])';
 /**
  * `@import "blob:…";` as foliate's `replaceCSS` rewrites it. Media-query
  * imports (`@import "…" print;`) are deliberately not matched: inlining
@@ -76,7 +77,9 @@ export class SectionStyleInliner {
   /** Mirror every parked/blocked stylesheet link of a loaded section. */
   async apply(doc: Document): Promise<void> {
     const links = Array.from(
-      doc.querySelectorAll<HTMLLinkElement>(`link[rel="${PARKED_REL}"], ${BLOCKED_LINKS}`),
+      doc.querySelectorAll<HTMLLinkElement>(
+        `link[rel="${PARKED_REL}"], ${BLOCKED_LINKS}`,
+      ),
     );
     await Promise.all(
       links.map(async (link) => {

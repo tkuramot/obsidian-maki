@@ -187,7 +187,10 @@ export class EpubViewerAdapter implements DocumentViewer {
       try {
         const cfi = this.view.getCFI(index, snapped);
         if (!cfi || isInvertedRangeCfi(cfi)) {
-          console.debug("Maki[epub]: selection rejected —", cfi ? `inverted CFI ${cfi}` : "empty CFI");
+          console.debug(
+            "Maki[epub]: selection rejected —",
+            cfi ? `inverted CFI ${cfi}` : "empty CFI",
+          );
           continue;
         }
         return {
@@ -197,7 +200,6 @@ export class EpubViewerAdapter implements DocumentViewer {
       } catch (error) {
         // A throwing getCFI is fork/type drift — never swallow it silently.
         console.warn("Maki: EPUB selection → CFI failed", error);
-        continue;
       }
     }
     return null;
@@ -226,7 +228,11 @@ export class EpubViewerAdapter implements DocumentViewer {
     }
     // Replacing an id whose CFI changed leaves no stale overlay behind.
     const previous = this.highlights.get(h.id);
-    if (previous && previous.locator.backend === "epub" && previous.locator.cfi !== h.locator.cfi) {
+    if (
+      previous &&
+      previous.locator.backend === "epub" &&
+      previous.locator.cfi !== h.locator.cfi
+    ) {
       this.eraseHighlight(h.id);
     }
     this.highlights.set(h.id, h);
@@ -237,7 +243,7 @@ export class EpubViewerAdapter implements DocumentViewer {
   eraseHighlight(id: HighlightId): void {
     const h = this.highlights.get(id);
     this.highlights.delete(id);
-    if (!h || h.locator.backend !== "epub") return;
+    if (h?.locator.backend !== "epub") return;
     const value = wrapCfi(h.locator.cfi);
     this.idByValue.delete(value);
     void this.view.deleteAnnotation({ value }).catch(() => undefined);

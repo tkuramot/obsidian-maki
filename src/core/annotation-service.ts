@@ -6,11 +6,11 @@
  * Locator, link, and snippet construction (the actual logic) is pure.
  */
 
-import { ColorModel } from "./color-model";
+import type { ColorModel } from "./color-model";
 import type { DocumentViewer } from "./document-viewer";
 import type { Codecs } from "./locator/codec";
 import { buildLink, COLOR_PARAM_KEY } from "./locator/link";
-import { TemplateEngine, type TemplateVariables } from "./template-engine";
+import type { TemplateEngine, TemplateVariables } from "./template-engine";
 import type { BackendId, Color, TextSelection } from "./types";
 
 /**
@@ -79,12 +79,12 @@ function buildVariables(
     },
   };
   if (sel.locator.backend === "pdf") {
-    vars["page"] = sel.locator.page;
-    vars["pageLabel"] = meta.pageLabels?.[sel.locator.page - 1] ?? sel.locator.page;
-    vars["pageCount"] = meta.pageCount;
+    vars.page = sel.locator.page;
+    vars.pageLabel = meta.pageLabels?.[sel.locator.page - 1] ?? sel.locator.page;
+    vars.pageCount = meta.pageCount;
   } else {
-    vars["chapter"] = meta.chapter;
-    vars["progress"] = meta.progress;
+    vars.chapter = meta.chapter;
+    vars.progress = meta.progress;
   }
   return vars;
 }

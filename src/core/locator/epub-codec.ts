@@ -15,7 +15,7 @@ export const EpubLocatorCodec: LocatorCodec = {
   },
 
   decode(params: SubpathParams): Locator | null {
-    const encoded = params["epubcfi"];
+    const encoded = params.epubcfi;
     if (encoded === undefined || encoded === "") return null;
     const cfi = decodeCfi(encoded);
     if (cfi === null || cfi === "") return null;

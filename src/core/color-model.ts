@@ -39,7 +39,8 @@ export function hexToRgb(hex: string): [number, number, number] | null {
 /** Rename a palette key while keeping the display order of the entries. */
 export function renamePaletteColor(palette: Palette, from: string, to: string): Palette {
   const next: Palette = {};
-  for (const [name, rgb] of Object.entries(palette)) next[name === from ? to : name] = rgb;
+  for (const [name, rgb] of Object.entries(palette))
+    next[name === from ? to : name] = rgb;
   return next;
 }
 

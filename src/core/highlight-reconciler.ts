@@ -8,7 +8,7 @@
  * conflict resolution, diffing — is pure and driven by injected data.
  */
 
-import { ColorModel } from "./color-model";
+import type { ColorModel } from "./color-model";
 import type { DocumentViewer } from "./document-viewer";
 import type { Codecs } from "./locator/codec";
 import { highlightIdFor } from "./locator/link";

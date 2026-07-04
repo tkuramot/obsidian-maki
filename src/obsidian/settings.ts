@@ -76,7 +76,9 @@ export class MakiSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Snippet template")
-      .setDesc("Block inserted into the note. Variables: {{linkWithDisplay}}, {{text}}, {{comment}}, ….")
+      .setDesc(
+        "Block inserted into the note. Variables: {{linkWithDisplay}}, {{text}}, {{comment}}, ….",
+      )
       .addTextArea((text) =>
         text.setValue(s.snippetTemplate).onChange(async (value) => {
           await this.plugin.updateSettings((settings) => {
@@ -85,25 +87,22 @@ export class MakiSettingTab extends PluginSettingTab {
         }),
       );
 
-    new Setting(containerEl)
-      .setName("Link display text (PDF)")
-      .addText((text) =>
-        text.setValue(s.displayTemplates.pdf).onChange(async (value) => {
-          await this.plugin.updateSettings((settings) => {
-            settings.displayTemplates.pdf = value || DEFAULT_SETTINGS.displayTemplates.pdf;
-          });
-        }),
-      );
+    new Setting(containerEl).setName("Link display text (PDF)").addText((text) =>
+      text.setValue(s.displayTemplates.pdf).onChange(async (value) => {
+        await this.plugin.updateSettings((settings) => {
+          settings.displayTemplates.pdf = value || DEFAULT_SETTINGS.displayTemplates.pdf;
+        });
+      }),
+    );
 
-    new Setting(containerEl)
-      .setName("Link display text (EPUB)")
-      .addText((text) =>
-        text.setValue(s.displayTemplates.epub).onChange(async (value) => {
-          await this.plugin.updateSettings((settings) => {
-            settings.displayTemplates.epub = value || DEFAULT_SETTINGS.displayTemplates.epub;
-          });
-        }),
-      );
+    new Setting(containerEl).setName("Link display text (EPUB)").addText((text) =>
+      text.setValue(s.displayTemplates.epub).onChange(async (value) => {
+        await this.plugin.updateSettings((settings) => {
+          settings.displayTemplates.epub =
+            value || DEFAULT_SETTINGS.displayTemplates.epub;
+        });
+      }),
+    );
 
     new Setting(containerEl)
       .setName("On text selection")
@@ -125,7 +124,6 @@ export class MakiSettingTab extends PluginSettingTab {
             });
           }),
       );
-
   }
 
   /**

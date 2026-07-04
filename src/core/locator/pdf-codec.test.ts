@@ -59,7 +59,7 @@ describe("PdfLocatorCodec.encode", () => {
       page: 1,
       target: { kind: "rect", rect: [72.5, 500.25, 520, 560] },
     };
-    expect(PdfLocatorCodec.encode(loc)["rect"]).toBe("72.5,500.25,520,560");
+    expect(PdfLocatorCodec.encode(loc).rect).toBe("72.5,500.25,520,560");
   });
 
   it("rejects a non-PDF locator (programmer error)", () => {
@@ -121,7 +121,10 @@ describe("PdfLocatorCodec.decode", () => {
 describe("parseSelectionEndpoints", () => {
   it("parses the native four-integer value, tolerating spaces", () => {
     expect(parseSelectionEndpoints("4,0,5,20")).toEqual({ begin: [4, 0], end: [5, 20] });
-    expect(parseSelectionEndpoints("4, 0, 5, 20")).toEqual({ begin: [4, 0], end: [5, 20] });
+    expect(parseSelectionEndpoints("4, 0, 5, 20")).toEqual({
+      begin: [4, 0],
+      end: [5, 20],
+    });
   });
 
   it("rejects wrong arity, non-integers, and negatives", () => {

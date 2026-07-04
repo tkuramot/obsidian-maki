@@ -26,9 +26,7 @@ describe("TemplateEngine", () => {
   });
 
   it("expands unknown or nullish variables to the empty string", () => {
-    expect(engine.expand("[{{missing}}][{{a.b.c}}][{{n}}]", { n: null })).toBe(
-      "[][][]",
-    );
+    expect(engine.expand("[{{missing}}][{{a.b.c}}][{{n}}]", { n: null })).toBe("[][][]");
   });
 
   it("stringifies non-string values, including 0 and false", () => {

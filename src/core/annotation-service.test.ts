@@ -52,7 +52,11 @@ describe("AnnotationService", () => {
   function pdfViewer(): FakeDocumentViewer {
     const viewer = new FakeDocumentViewer({ path: "papers/paper.pdf", backend: "pdf" });
     viewer.selection = {
-      locator: { backend: "pdf", page: 3, target: { kind: "text", begin: [4, 0], end: [5, 20] } },
+      locator: {
+        backend: "pdf",
+        page: 3,
+        target: { kind: "text", begin: [4, 0], end: [5, 20] },
+      },
       text: "quoted passage",
     };
     viewer.meta = { pageCount: 10 };
@@ -94,7 +98,11 @@ describe("AnnotationService", () => {
   });
 
   it("serializes a paletteless color as r,g,b", async () => {
-    const result = await service.annotate(pdfViewer(), { rgb: [0, 200, 120] }, "clipboard");
+    const result = await service.annotate(
+      pdfViewer(),
+      { rgb: [0, 200, 120] },
+      "clipboard",
+    );
     expect(result!.link).toContain("&color=0,200,120|");
   });
 

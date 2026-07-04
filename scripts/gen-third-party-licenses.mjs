@@ -128,11 +128,15 @@ resolves into the bundle; do not edit it by hand — run \`pnpm licenses\`.
 
 `;
   const body = sections
-    .map((s) => `--------------------------------------------------------------------------------
+    .map(
+      (
+        s,
+      ) => `--------------------------------------------------------------------------------
 ${s.name}@${s.version} — ${s.spdx}
 --------------------------------------------------------------------------------
 
-${s.text}`)
+${s.text}`,
+    )
     .join("\n\n");
   return `${header}${body}\n`;
 }
@@ -148,7 +152,8 @@ for (const file of Object.keys(result.metafile.inputs)) {
 const sections = [...dirs]
   .map((dir) => {
     const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
-    const spdx = (typeof pkg.license === "string" ? pkg.license : pkg.license?.type) ?? "UNKNOWN";
+    const spdx =
+      (typeof pkg.license === "string" ? pkg.license : pkg.license?.type) ?? "UNKNOWN";
     return { name: pkg.name, version: pkg.version, spdx, text: licenseText(dir, pkg) };
   })
   .sort((a, b) => a.name.localeCompare(b.name));

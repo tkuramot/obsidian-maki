@@ -5,7 +5,8 @@ import { transformSectionHtml } from "./section-transform";
 const XHTML = `<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml"><head><title>t</title></head><body><p>one</p><p>two</p></body></html>`;
 
-const HTML = "<!DOCTYPE html><html><head><title>t</title></head><body><p>one</p><p>two</p></body></html>";
+const HTML =
+  "<!DOCTYPE html><html><head><title>t</title></head><body><p>one</p><p>two</p></body></html>";
 
 describe("transformSectionHtml", () => {
   it("returns the source byte-identical when mutate reports no change", () => {
@@ -26,7 +27,9 @@ describe("transformSectionHtml", () => {
 
   it("serializes XHTML as XML, preserving the namespace and body", () => {
     const out = transformSectionHtml(XHTML, "application/xhtml+xml", (doc) => {
-      doc.querySelector("head")!.append(doc.createElementNS("http://www.w3.org/1999/xhtml", "meta"));
+      doc
+        .querySelector("head")!
+        .append(doc.createElementNS("http://www.w3.org/1999/xhtml", "meta"));
       return true;
     });
     expect(out).toContain('xmlns="http://www.w3.org/1999/xhtml"');

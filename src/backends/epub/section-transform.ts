@@ -13,7 +13,10 @@ export function transformSectionHtml(
   mediaType: string,
   mutate: (doc: Document) => boolean,
 ): string {
-  const doc = new DOMParser().parseFromString(source, mediaType as DOMParserSupportedType);
+  const doc = new DOMParser().parseFromString(
+    source,
+    mediaType as DOMParserSupportedType,
+  );
   if (!mutate(doc)) return source;
   if (mediaType === "text/html") {
     return `<!DOCTYPE html>${doc.documentElement?.outerHTML ?? source}`;

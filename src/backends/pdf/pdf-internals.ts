@@ -99,7 +99,10 @@ export interface PdfViewerChildLike {
    * `range` is `[[beginItem, beginOffset], [endItem, endOffset]]` in the same
    * text-item convention the locator format reuses.
    */
-  highlightText?(pageNumber: number, range: [[number, number], [number, number]]): unknown;
+  highlightText?(
+    pageNumber: number,
+    range: [[number, number], [number, number]],
+  ): unknown;
   /** Remove the native text highlight painted by `highlightText`. */
   clearTextHighlight?(): unknown;
 }

@@ -57,7 +57,9 @@ describe("HighlightReconciler", () => {
       entry(page7, { path: "a.md", line: 9 }),
     ]);
     viewer.calls.length = 0;
-    const summary = reconciler.reconcile(viewer, [entry(page3, { path: "a.md", line: 1 })]);
+    const summary = reconciler.reconcile(viewer, [
+      entry(page3, { path: "a.md", line: 1 }),
+    ]);
     expect(summary.drawn).toBe(1);
     expect(viewer.calls).toEqual([{ op: "erase", id: "pdf:page=7&rect=72,500,520,560" }]);
   });
@@ -97,7 +99,9 @@ describe("HighlightReconciler", () => {
   });
 
   it("falls back to the default color for an unknown color value", () => {
-    reconciler.reconcile(viewer, [entry(page3, { path: "a.md", line: 1 }, "no-such-color")]);
+    reconciler.reconcile(viewer, [
+      entry(page3, { path: "a.md", line: 1 }, "no-such-color"),
+    ]);
     expect([...viewer.highlights.values()][0]!.color).toEqual(defaultColor);
   });
 

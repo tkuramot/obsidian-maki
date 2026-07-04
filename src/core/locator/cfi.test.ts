@@ -9,9 +9,7 @@ describe("encodeCfi", () => {
   });
 
   it("encodes every reserved character", () => {
-    expect(encodeCfi("%[],&=#|():")).toBe(
-      "%25%5B%5D%2C%26%3D%23%7C%28%29%3A",
-    );
+    expect(encodeCfi("%[],&=#|():")).toBe("%25%5B%5D%2C%26%3D%23%7C%28%29%3A");
   });
 
   it("leaves slashes, bangs, and alphanumerics untouched", () => {

@@ -29,7 +29,12 @@ export async function annotateViewer(
   opts: { comment?: string | undefined; quiet?: boolean } = {},
 ): Promise<void> {
   try {
-    const result = await plugin.annotations.annotate(viewer, color, destination, opts.comment);
+    const result = await plugin.annotations.annotate(
+      viewer,
+      color,
+      destination,
+      opts.comment,
+    );
     if (!result) {
       if (!opts.quiet) new Notice("Maki: nothing is selected");
       return;
@@ -68,8 +73,16 @@ const ON_SELECT_NOTICE: Record<OnSelectAction, string> = {
 };
 
 export function registerCommands(plugin: MakiPlugin): void {
-  const families: Array<{ id: string; verb: string; destination: AnnotationDestination }> = [
-    { id: "copy-link-to-selection", verb: "Copy link to selection", destination: "clipboard" },
+  const families: Array<{
+    id: string;
+    verb: string;
+    destination: AnnotationDestination;
+  }> = [
+    {
+      id: "copy-link-to-selection",
+      verb: "Copy link to selection",
+      destination: "clipboard",
+    },
     { id: "insert-link-into-note", verb: "Insert link into note", destination: "note" },
   ];
 
@@ -100,7 +113,9 @@ export function registerCommands(plugin: MakiPlugin): void {
           s.onSelect = ON_SELECT_CYCLE[s.onSelect];
         })
         .then(() => {
-          new Notice(`Maki: selecting text will ${ON_SELECT_NOTICE[plugin.settings.onSelect]}`);
+          new Notice(
+            `Maki: selecting text will ${ON_SELECT_NOTICE[plugin.settings.onSelect]}`,
+          );
         });
     },
   });

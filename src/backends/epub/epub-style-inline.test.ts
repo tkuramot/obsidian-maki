@@ -53,9 +53,9 @@ describe("inlineCssImports", () => {
   });
 
   it("recurses into nested imports via the loader", async () => {
-    await expect(inlineCssImports('@import url("blob:app://x/b");', load, 4)).resolves.toBe(
-      "p { color: red; }\nb { color: blue; }",
-    );
+    await expect(
+      inlineCssImports('@import url("blob:app://x/b");', load, 4),
+    ).resolves.toBe("p { color: red; }\nb { color: blue; }");
   });
 
   it("stops at the depth limit instead of looping on circular imports", async () => {

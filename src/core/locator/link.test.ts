@@ -17,7 +17,11 @@ const book: DocumentRef = { path: "book.epub", backend: "epub" };
 describe("buildLink (spec §6 golden examples)", () => {
   it("builds a PDF text-selection link with display and color", () => {
     expect(
-      buildLink(paper, { page: "3", selection: "4,0,5,20", color: "yellow" }, "paper, p.3"),
+      buildLink(
+        paper,
+        { page: "3", selection: "4,0,5,20", color: "yellow" },
+        "paper, p.3",
+      ),
     ).toBe("[[paper.pdf#page=3&selection=4,0,5,20&color=yellow|paper, p.3]]");
   });
 
@@ -157,14 +161,17 @@ describe("removeAnnotationLink (FR-7.3)", () => {
   });
 
   it("restarts at an inner [[ like Obsidian's parser", () => {
-    const content = "x [[not a link [[paper.pdf#page=3&selection=4,0,5,20&color=yellow]] y";
+    const content =
+      "x [[not a link [[paper.pdf#page=3&selection=4,0,5,20&color=yellow]] y";
     expect(removeAnnotationLink(content, subpath)).toBe("x [[not a link  y");
   });
 });
 
 describe("parseAnnotationLink", () => {
   it("classifies a subpath with params as an annotation and extracts the color", () => {
-    expect(parseAnnotationLink("paper.pdf#page=3&selection=4,0,5,20&color=yellow")).toEqual({
+    expect(
+      parseAnnotationLink("paper.pdf#page=3&selection=4,0,5,20&color=yellow"),
+    ).toEqual({
       linkpath: "paper.pdf",
       params: { page: "3", selection: "4,0,5,20", color: "yellow" },
       color: "yellow",

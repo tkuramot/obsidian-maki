@@ -14,7 +14,10 @@ export function snapToTextEndpoints(range: Range): Range | null {
 
   const doc = range.commonAncestorContainer.ownerDocument;
   if (!doc) return null;
-  const walker = doc.createTreeWalker(range.commonAncestorContainer, NodeFilter.SHOW_TEXT);
+  const walker = doc.createTreeWalker(
+    range.commonAncestorContainer,
+    NodeFilter.SHOW_TEXT,
+  );
   let first: Text | null = null;
   let last: Text | null = null;
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {

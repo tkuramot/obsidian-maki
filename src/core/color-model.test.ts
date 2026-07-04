@@ -86,11 +86,15 @@ describe("rgbToHex / hexToRgb", () => {
 
 describe("renamePaletteColor", () => {
   it("renames the key while keeping entry order", () => {
-    const palette: Palette = { yellow: [255, 208, 0], red: [255, 86, 86], blue: [84, 155, 255] };
+    const palette: Palette = {
+      yellow: [255, 208, 0],
+      red: [255, 86, 86],
+      blue: [84, 155, 255],
+    };
     const renamed = renamePaletteColor(palette, "red", "crimson");
     expect(Object.keys(renamed)).toEqual(["yellow", "crimson", "blue"]);
-    expect(renamed["crimson"]).toEqual([255, 86, 86]);
-    expect(palette["red"]).toEqual([255, 86, 86]); // input untouched
+    expect(renamed.crimson).toEqual([255, 86, 86]);
+    expect(palette.red).toEqual([255, 86, 86]); // input untouched
   });
 
   it("returns an equal palette when the key does not exist", () => {

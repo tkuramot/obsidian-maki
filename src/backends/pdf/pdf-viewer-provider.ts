@@ -10,7 +10,11 @@ import type { DocumentViewer, ViewerHost } from "../../core/document-viewer";
 import type { DocumentRef } from "../../core/types";
 import type { Disposable } from "../../core/types";
 import type { PluginContext, ViewerProvider } from "../../core/viewer-provider";
-import type { PdfViewerChildLike, PdfViewerComponentLike, PdfViewLike } from "./pdf-internals";
+import type {
+  PdfViewerChildLike,
+  PdfViewerComponentLike,
+  PdfViewLike,
+} from "./pdf-internals";
 import { PdfViewerAdapter } from "./pdf-viewer-adapter";
 
 const ACQUIRE_TIMEOUT_MS = 10_000;
@@ -88,7 +92,9 @@ export class PdfViewerProvider implements ViewerProvider {
     const toolbar = view.containerEl?.querySelector<HTMLElement>(".pdf-toolbar-right");
     if (!toolbar) return;
     // A stale button can survive a torn-down adapter if the view was reused.
-    toolbar.querySelectorAll(".maki-color-picker").forEach((el) => el.remove());
+    toolbar.querySelectorAll(".maki-color-picker").forEach((el) => {
+      el.remove();
+    });
     const picker = this.deps.mountColorPicker(toolbar);
     toolbar.prepend(picker.el); // before the native right-side buttons
     adapter.own(() => picker.dispose());

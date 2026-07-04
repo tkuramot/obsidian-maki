@@ -67,20 +67,20 @@ export const PdfLocatorCodec: LocatorCodec = {
     const params: SubpathParams = { page: String(pdf.page) };
     switch (pdf.target.kind) {
       case "text":
-        params["selection"] = [...pdf.target.begin, ...pdf.target.end].join(",");
+        params.selection = [...pdf.target.begin, ...pdf.target.end].join(",");
         break;
       case "rect":
-        params["rect"] = pdf.target.rect.join(",");
+        params.rect = pdf.target.rect.join(",");
         break;
       case "annotation":
-        params["annotation"] = pdf.target.id;
+        params.annotation = pdf.target.id;
         break;
     }
     return params;
   },
 
   decode(params: SubpathParams): Locator | null {
-    const page = params["page"] !== undefined ? parseInteger(params["page"]) : null;
+    const page = params.page !== undefined ? parseInteger(params.page) : null;
     if (page === null || page < 1) return null;
 
     // Target keys take strict precedence (selection > rect > annotation): a
@@ -88,12 +88,12 @@ export const PdfLocatorCodec: LocatorCodec = {
     // higher-precedence key means the whole locator is undecodable — it never
     // falls through to a lower-precedence key.
     let target: PdfLocator["target"] | null = null;
-    if (params["selection"] !== undefined) {
-      target = parseSelection(params["selection"]);
-    } else if (params["rect"] !== undefined) {
-      target = parseRect(params["rect"]);
-    } else if (params["annotation"] !== undefined && params["annotation"] !== "") {
-      target = { kind: "annotation", id: params["annotation"] };
+    if (params.selection !== undefined) {
+      target = parseSelection(params.selection);
+    } else if (params.rect !== undefined) {
+      target = parseRect(params.rect);
+    } else if (params.annotation !== undefined && params.annotation !== "") {
+      target = { kind: "annotation", id: params.annotation };
     }
     if (!target) return null;
 

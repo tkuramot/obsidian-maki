@@ -4,7 +4,11 @@
  * file itself; imported by the tests that drive the port.
  */
 
-import type { DocumentMetadata, DocumentViewer, RevealOutcome } from "../src/core/document-viewer";
+import type {
+  DocumentMetadata,
+  DocumentViewer,
+  RevealOutcome,
+} from "../src/core/document-viewer";
 import type {
   BackendId,
   Disposable,

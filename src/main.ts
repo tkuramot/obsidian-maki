@@ -8,10 +8,7 @@ import { debounce, Plugin, type WorkspaceLeaf } from "obsidian";
 import { MakiEpubView, MAKI_EPUB_VIEW_TYPE } from "./backends/epub/epub-view";
 import { EpubViewerProvider } from "./backends/epub/epub-viewer-provider";
 import { PdfViewerProvider } from "./backends/pdf/pdf-viewer-provider";
-import {
-  AnnotationService,
-  type AnnotationSettings,
-} from "./core/annotation-service";
+import { AnnotationService, type AnnotationSettings } from "./core/annotation-service";
 import { ColorModel, DEFAULT_PALETTE, type Palette } from "./core/color-model";
 import type { DocumentViewer } from "./core/document-viewer";
 import { HighlightReconciler } from "./core/highlight-reconciler";
@@ -31,7 +28,7 @@ import { DEFAULT_SETTINGS, MakiSettingTab, type MakiSettings } from "./obsidian/
 import { openNoteAt, ViewerManager } from "./obsidian/viewer-manager";
 
 /** Used only when the user's palette is empty; tracks the default yellow. */
-const FALLBACK_COLOR: Color = { name: "yellow", rgb: [...DEFAULT_PALETTE["yellow"]!] };
+const FALLBACK_COLOR: Color = { name: "yellow", rgb: [...DEFAULT_PALETTE.yellow!] };
 
 /** Reading positions update per page turn; batch the disk writes. */
 const POSITION_SAVE_MS = 1000;
@@ -71,7 +68,11 @@ export default class MakiPlugin extends Plugin {
     await this.loadSettings();
 
     this.colors = new ColorModel(this.livePalette);
-    this.reconciler = new HighlightReconciler(this.codecs, this.colors, this.defaultColor());
+    this.reconciler = new HighlightReconciler(
+      this.codecs,
+      this.colors,
+      this.defaultColor(),
+    );
     this.annotations = new AnnotationService({
       codecs: this.codecs,
       templates: new TemplateEngine(),
@@ -89,7 +90,8 @@ export default class MakiPlugin extends Plugin {
         mountColorPicker: (parent) => this.mountColorPicker(parent),
         prefs: () => this.settings.epub,
         // updateSettings re-applies preferences to every open EPUB view.
-        updatePrefs: (mutate) => void this.updateSettings((settings) => mutate(settings.epub)),
+        updatePrefs: (mutate) =>
+          void this.updateSettings((settings) => mutate(settings.epub)),
         getPosition: (path) => this.settings.readingPositions[path],
         setPosition: (path, cfi) => {
           this.settings.readingPositions[path] = cfi;
@@ -125,7 +127,9 @@ export default class MakiPlugin extends Plugin {
       index,
       (viewer, id) => this.openHighlightSources(viewer, id),
       (viewer) => {
-        const sub = viewer.onSelectionChange((sel) => autoAnnotator.onSelection(viewer, sel));
+        const sub = viewer.onSelectionChange((sel) =>
+          autoAnnotator.onSelection(viewer, sel),
+        );
         const drag = viewer.onSelectionDrag((dragging) =>
           autoAnnotator.onDragChange(viewer, dragging),
         );

@@ -172,7 +172,9 @@ export class PdfViewerAdapter implements DocumentViewer {
     // Obsidian's own subpath navigation scrolls and (for selection/rect)
     // flashes natively; without flash, navigate to the page only.
     const params = PdfLocatorCodec.encode(target);
-    const subpath = serializeSubpath(opts?.flash === false ? { page: params["page"]! } : params);
+    const subpath = serializeSubpath(
+      opts?.flash === false ? { page: params.page! } : params,
+    );
     if (typeof this.child.applySubpath === "function") {
       this.child.applySubpath(`#${subpath}`);
     } else if (typeof this.view.setEphemeralState === "function") {
@@ -207,7 +209,10 @@ export class PdfViewerAdapter implements DocumentViewer {
     const endPage = this.pageElOf(range.endContainer);
     // Cross-page selections have no single-page locator; skip.
     if (!startPage || startPage !== endPage) {
-      console.debug("Maki[pdf]: selection rejected —", startPage ? "spans pages" : "no .page ancestor");
+      console.debug(
+        "Maki[pdf]: selection rejected —",
+        startPage ? "spans pages" : "no .page ancestor",
+      );
       return null;
     }
 
@@ -254,7 +259,9 @@ export class PdfViewerAdapter implements DocumentViewer {
   ): [begin: [number, number], end: [number, number]] | null {
     const textDivs = textDivsOf(this.pageView(pageNumber));
     if (!textDivs || textDivs.length === 0) {
-      console.debug("Maki[pdf]: selection rejected — no textDivs on page view (internals drift?)");
+      console.debug(
+        "Maki[pdf]: selection rejected — no textDivs on page view (internals drift?)",
+      );
       return null;
     }
     const begin = this.endpointOf(range.startContainer, range.startOffset, textDivs, doc);
@@ -329,7 +336,9 @@ export class PdfViewerAdapter implements DocumentViewer {
   clearHighlights(): void {
     this.highlights.clear();
     const container = this.containerEl();
-    container?.querySelectorAll(`.${OVERLAY_CLASS}`).forEach((el) => el.remove());
+    container?.querySelectorAll(`.${OVERLAY_CLASS}`).forEach((el) => {
+      el.remove();
+    });
   }
 
   onHighlightActivate(cb: (id: HighlightId) => void): Disposable {
@@ -375,7 +384,7 @@ export class PdfViewerAdapter implements DocumentViewer {
         const top = Math.min(y1, y2);
         const el = overlay.ownerDocument.createElement("div");
         el.className = HIGHLIGHT_CLASS;
-        el.dataset["makiId"] = h.id;
+        el.dataset.makiId = h.id;
         // Percentages survive zoom changes between re-renders.
         el.style.left = `${(left / viewport.width) * 100}%`;
         el.style.top = `${(top / viewport.height) * 100}%`;
@@ -405,15 +414,18 @@ export class PdfViewerAdapter implements DocumentViewer {
   private makiHighlightIdAt(pageNumber: number, range: unknown): HighlightId | null {
     const nums = Array.isArray(range) && range.length === 2 ? range.flat() : null;
     if (
-      !nums ||
-      nums.length !== 4 ||
+      nums?.length !== 4 ||
       nums.some((n) => typeof n !== "number" || !Number.isInteger(n) || n < 0)
     ) {
       return null;
     }
     const [bi, bo, ei, eo] = nums as [number, number, number, number];
     const id = highlightIdFor(
-      { backend: "pdf", page: pageNumber, target: { kind: "text", begin: [bi, bo], end: [ei, eo] } },
+      {
+        backend: "pdf",
+        page: pageNumber,
+        target: { kind: "text", begin: [bi, bo], end: [ei, eo] },
+      },
       PdfLocatorCodec,
     );
     return this.highlights.has(id) ? id : null;
@@ -422,7 +434,7 @@ export class PdfViewerAdapter implements DocumentViewer {
   /** Clear the native subpath highlight once Maki draws the same range. */
   private clearNativeDuplicate(): void {
     const sub = this.child.subpathHighlight;
-    if (!sub || sub.type !== "text" || typeof sub.page !== "number") return;
+    if (sub?.type !== "text" || typeof sub.page !== "number") return;
     if (this.makiHighlightIdAt(sub.page, sub.range) === null) return;
     this.child.clearTextHighlight?.();
   }
@@ -440,7 +452,9 @@ export class PdfViewerAdapter implements DocumentViewer {
     const container = this.containerEl();
     container
       ?.querySelectorAll(`.${HIGHLIGHT_CLASS}[data-maki-id="${CSS.escape(id)}"]`)
-      .forEach((el) => el.remove());
+      .forEach((el) => {
+        el.remove();
+      });
   }
 
   private textItems(pageNumber: number): Promise<TextItemBox[]> {
