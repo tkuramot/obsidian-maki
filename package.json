@@ -4,6 +4,7 @@
   "description": "Read and annotate PDF and EPUB documents inside Obsidian, with markdown notes as the source of truth.",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@11.5.3",
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "tsc --noEmit && node esbuild.config.mjs production",
