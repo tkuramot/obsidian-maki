@@ -72,12 +72,25 @@ directly from the viewer toolbar.
 
 ## Installation
 
-Maki is not in the community plugin registry yet — install it manually:
+Maki is not in the community plugin registry yet. The easiest way to install it —
+and get automatic updates — is with [BRAT](https://github.com/TfTHacker/obsidian42-brat):
+
+1. Install BRAT from *Settings → Community plugins* and enable it.
+2. Run the command *BRAT: Add a beta plugin for testing*.
+3. Enter `tkuramot/obsidian-maki`, pick the latest version, and confirm.
+4. Enable Maki in *Settings → Community plugins*.
+
+BRAT will keep Maki up to date as new releases are published.
+
+<details>
+<summary>Manual installation</summary>
 
 1. Build the plugin (see below), or grab `main.js`, `manifest.json`, and
-   `styles.css` from a release.
+   `styles.css` from a [release](https://github.com/tkuramot/obsidian-maki/releases).
 2. Copy them into `<your vault>/.obsidian/plugins/maki/`.
 3. Reload Obsidian and enable Maki in *Settings → Community plugins*.
+
+</details>
 
 Desktop only (the PDF backend binds to Obsidian's desktop PDF viewer).
 
