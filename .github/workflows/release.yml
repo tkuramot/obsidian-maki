@@ -1,0 +1,72 @@
+name: Release
+
+# Manual release: bump the version, run the test suite, then publish a tagged
+# GitHub release carrying the three files Obsidian installs.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        type: choice
+        required: true
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # vendor/foliate-js is a submodule the build imports; without it the
+          # esbuild bundle fails to resolve the `foliate-js` alias.
+          submodules: recursive
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm test
+
+      - name: Bump version
+        id: bump
+        run: |
+          node scripts/bump.mjs "${{ inputs.bump }}"
+          echo "version=$(jq -r .version manifest.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: pnpm build
+
+      - name: Commit and push version bump
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json versions.json package.json
+          git commit -m "Release $VERSION"
+          git push origin HEAD:${{ github.ref_name }}
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          gh release create "$VERSION" \
+            --target "$(git rev-parse HEAD)" \
+            --title "$VERSION" \
+            --generate-notes \
+            main.js manifest.json styles.css
