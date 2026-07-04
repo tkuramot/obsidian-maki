@@ -88,6 +88,20 @@ export interface PdfViewerChildLike {
    * the text layer ourselves: it tracks pdf.js's DOM across versions.
    */
   getTextSelectionRangeStr?(pageEl: HTMLElement): string | null;
+  /**
+   * The pending native subpath highlight (set by `applySubpath`), re-applied
+   * by Obsidian whenever the target page's text layer (re)renders. For a
+   * `selection=` subpath: `{ type: "text", page, range }`.
+   */
+  subpathHighlight?: { type?: string; page?: number; range?: unknown } | null;
+  /**
+   * Paint the native persistent text highlight for a `selection=` subpath;
+   * `range` is `[[beginItem, beginOffset], [endItem, endOffset]]` in the same
+   * text-item convention the locator format reuses.
+   */
+  highlightText?(pageNumber: number, range: [[number, number], [number, number]]): unknown;
+  /** Remove the native text highlight painted by `highlightText`. */
+  clearTextHighlight?(): unknown;
 }
 
 /** PDFViewerComponent — `PDFView.viewer`; thenable once the child exists. */

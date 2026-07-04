@@ -13,8 +13,9 @@ import type {
   DocumentViewer,
   RevealOutcome,
 } from "../../core/document-viewer";
+import { around } from "monkey-around";
 import { PdfLocatorCodec } from "../../core/locator/pdf-codec";
-import { serializeSubpath } from "../../core/locator/link";
+import { highlightIdFor, serializeSubpath } from "../../core/locator/link";
 import { selectionRects, type Rect, type TextItemBox } from "../../core/pdf-geometry";
 import type {
   Disposable,
@@ -93,6 +94,27 @@ export class PdfViewerAdapter implements DocumentViewer {
       };
       eventBus.on("pagerendered", onPageRendered);
       this.disposers.push(() => eventBus.off("pagerendered", onPageRendered));
+    }
+
+    // Opening a `selection=` subpath makes Obsidian paint its own persistent
+    // text highlight — doubled up with Maki's for every annotation link.
+    // Suppress the native paint for ranges Maki draws; anything Maki does not
+    // draw keeps the native behavior. Instance wrap, no prototype patch.
+    if (typeof this.child.highlightText === "function") {
+      const adapter = this;
+      this.disposers.push(
+        around(this.child, {
+          highlightText: (next) =>
+            function (
+              this: PdfViewerChildLike,
+              pageNumber: number,
+              range: [[number, number], [number, number]],
+            ) {
+              if (adapter.makiHighlightIdAt(pageNumber, range)) return undefined;
+              return next?.call(this, pageNumber, range);
+            },
+        }),
+      );
     }
 
     const container = this.containerEl();
@@ -379,9 +401,44 @@ export class PdfViewerAdapter implements DocumentViewer {
         });
         overlay.append(el);
       }
+      // The native subpath highlight may already be painted (the document was
+      // opened via the link before this highlight was drawn) — the
+      // highlightText wrap can't catch that ordering, so clear it here.
+      this.clearNativeDuplicate();
     } catch (error) {
       console.error("Maki: PDF highlight failed", error);
     }
+  }
+
+  /**
+   * The id of the registered Maki highlight covering exactly the native
+   * `(page, [[beginItem, beginOffset], [endItem, endOffset]])` text range, if
+   * any. Reuses the canonical locator id, so "same range" means "the same
+   * highlight the reconciler draws".
+   */
+  private makiHighlightIdAt(pageNumber: number, range: unknown): HighlightId | null {
+    const nums = Array.isArray(range) && range.length === 2 ? range.flat() : null;
+    if (
+      !nums ||
+      nums.length !== 4 ||
+      nums.some((n) => typeof n !== "number" || !Number.isInteger(n) || n < 0)
+    ) {
+      return null;
+    }
+    const [bi, bo, ei, eo] = nums as [number, number, number, number];
+    const id = highlightIdFor(
+      { backend: "pdf", page: pageNumber, target: { kind: "text", begin: [bi, bo], end: [ei, eo] } },
+      PdfLocatorCodec,
+    );
+    return this.highlights.has(id) ? id : null;
+  }
+
+  /** Clear the native subpath highlight once Maki draws the same range. */
+  private clearNativeDuplicate(): void {
+    const sub = this.child.subpathHighlight;
+    if (!sub || sub.type !== "text" || typeof sub.page !== "number") return;
+    if (this.makiHighlightIdAt(sub.page, sub.range) === null) return;
+    this.child.clearTextHighlight?.();
   }
 
   private ensureOverlay(pageEl: HTMLElement): HTMLElement {
