@@ -76,7 +76,7 @@ Maki is not in the community plugin registry yet — install it manually:
 
 1. Build the plugin (see below), or grab `main.js`, `manifest.json`, and
    `styles.css` from a release.
-2. Copy them into `<your vault>/.obsidian/plugins/obsidian-maki/`.
+2. Copy them into `<your vault>/.obsidian/plugins/maki/`.
 3. Reload Obsidian and enable Maki in *Settings → Community plugins*.
 
 Desktop only (the PDF backend binds to Obsidian's desktop PDF viewer).
