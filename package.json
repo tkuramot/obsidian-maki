@@ -1,6 +1,6 @@
 {
   "name": "obsidian-maki",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Read and annotate PDF and EPUB documents inside Obsidian, with markdown notes as the source of truth.",
   "private": true,
   "type": "module",
