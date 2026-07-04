@@ -13,7 +13,7 @@ import type { AnnotationDestination } from "../core/annotation-service";
 import type { DocumentViewer } from "../core/document-viewer";
 import type { Color } from "../core/types";
 import type MakiPlugin from "../main";
-import { ColorSuggestModal, CommentModal } from "./modals";
+import { CommentModal } from "./modals";
 import type { OnSelectAction } from "./settings";
 
 /**
@@ -78,16 +78,6 @@ export function registerCommands(plugin: MakiPlugin): void {
       id,
       name: verb,
       callback: () => void annotate(plugin, plugin.selectedColor(), destination),
-    });
-
-    plugin.addCommand({
-      id: `${id}-with-color`,
-      name: `${verb} (pick color)`,
-      callback: () => {
-        new ColorSuggestModal(plugin.app, plugin.paletteColors(), (color) => {
-          void annotate(plugin, color, destination);
-        }).open();
-      },
     });
 
     plugin.addCommand({

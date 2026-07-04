@@ -4,34 +4,7 @@
  */
 
 import { Modal, SuggestModal, type App } from "obsidian";
-import type { Color, NoteRef } from "../core/types";
-
-/** Pick a palette color. */
-export class ColorSuggestModal extends SuggestModal<Color> {
-  constructor(
-    app: App,
-    private readonly colors: Color[],
-    private readonly onPick: (color: Color) => void,
-  ) {
-    super(app);
-    this.setPlaceholder("Highlight color…");
-  }
-
-  getSuggestions(query: string): Color[] {
-    const q = query.toLowerCase();
-    return this.colors.filter((c) => (c.name ?? "").toLowerCase().includes(q));
-  }
-
-  renderSuggestion(color: Color, el: HTMLElement): void {
-    const swatch = el.createSpan({ cls: "maki-color-swatch" });
-    swatch.style.backgroundColor = `rgb(${color.rgb.join(",")})`;
-    el.createSpan({ text: ` ${color.name ?? color.rgb.join(",")}` });
-  }
-
-  onChooseSuggestion(color: Color): void {
-    this.onPick(color);
-  }
-}
+import type { NoteRef } from "../core/types";
 
 /** Pick one of several source notes referencing the same passage. */
 export class SourceSuggestModal extends SuggestModal<NoteRef> {

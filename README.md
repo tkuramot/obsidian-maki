@@ -53,7 +53,6 @@ plain markdown survives.
 | --- | --- |
 | Copy link to selection | Copy an annotation link for the current selection to the clipboard |
 | Insert link into note | Insert the annotation snippet into the target note |
-| … (pick color) | Same, but choose the highlight color first |
 | … with comment | Same, but attach a comment |
 | Cycle what selecting text does | Toggle the on-selection action: off → copy → insert |
 
