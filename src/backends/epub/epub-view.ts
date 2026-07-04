@@ -98,7 +98,9 @@ export class MakiEpubView extends FileView {
   ) {
     super(leaf);
     this.resetReady();
-    this.navigation = false;
+    // Keep FileView's default `navigation = true` so opening this view from a
+    // note link records the note in the leaf's history — otherwise "back"
+    // cannot return to the source note (matches PDF's native behaviour).
   }
 
   override getViewType(): string {
