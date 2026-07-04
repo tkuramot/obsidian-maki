@@ -7,10 +7,12 @@
   "packageManager": "pnpm@11.5.3",
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "tsc --noEmit && node esbuild.config.mjs production",
+    "build": "tsc --noEmit && node esbuild.config.mjs production && node scripts/gen-third-party-licenses.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "licenses": "node scripts/gen-third-party-licenses.mjs",
+    "licenses:check": "node scripts/gen-third-party-licenses.mjs --check",
     "bump": "node scripts/bump.mjs"
   },
   "license": "MIT",

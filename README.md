@@ -111,4 +111,6 @@ personal use, but still young — expect rough edges, and please report issues.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). The bundled `main.js` includes third-party code whose licenses
+are collected in [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES) — a generated file
+(`pnpm licenses`) derived from whatever esbuild actually bundles.

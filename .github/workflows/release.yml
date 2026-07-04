@@ -56,7 +56,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add manifest.json versions.json package.json
+          git add manifest.json versions.json package.json THIRD_PARTY_LICENSES
           git commit -m "Release $VERSION"
           git push origin HEAD:${{ github.ref_name }}
 
@@ -69,4 +69,4 @@ jobs:
             --target "$(git rev-parse HEAD)" \
             --title "$VERSION" \
             --generate-notes \
-            main.js manifest.json styles.css
+            main.js manifest.json styles.css THIRD_PARTY_LICENSES
