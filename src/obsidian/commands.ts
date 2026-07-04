@@ -2,8 +2,10 @@
  * Commands: translate user intent into `AnnotationService` calls on
  * the active `DocumentViewer`. The command verb *is* the destination —
  * "Copy …" always goes to the clipboard, "Insert …" always goes into the
- * target note; there are no effect toggles. Every effect that is not
- * visible in place confirms itself with a notice.
+ * target note; there are no effect toggles. Notices are reserved for
+ * effects with no visible trace: an inserted link immediately renders as
+ * a highlight (its own confirmation), so only the clipboard — which
+ * changes nothing on screen — confirms with a notice.
  */
 
 import { Notice } from "obsidian";
@@ -14,16 +16,10 @@ import type MakiPlugin from "../main";
 import { ColorSuggestModal, CommentModal } from "./modals";
 import type { OnSelectAction } from "./settings";
 
-const DESTINATION_NOTICE: Record<AnnotationDestination, string> = {
-  clipboard: "link copied",
-  note: "link inserted into the note",
-};
-
 /**
- * Run the annotate pipeline on a specific viewer and confirm the effect
- * with a notice (FR-9.4). `quiet` suppresses the "nothing is selected"
- * complaint — annotate-on-selection fires on selections the backend may
- * reject (e.g. cross-page), which must not nag.
+ * Run the annotate pipeline on a specific viewer. `quiet` suppresses the
+ * "nothing is selected" complaint — annotate-on-selection fires on
+ * selections the backend may reject (e.g. cross-page), which must not nag.
  */
 export async function annotateViewer(
   plugin: MakiPlugin,
@@ -38,7 +34,7 @@ export async function annotateViewer(
       if (!opts.quiet) new Notice("Maki: nothing is selected");
       return;
     }
-    new Notice(`Maki: ${DESTINATION_NOTICE[destination]}`);
+    if (destination === "clipboard") new Notice("Maki: link copied");
   } catch (error) {
     console.error("Maki: annotate failed", error);
     new Notice(`Maki: ${error instanceof Error ? error.message : "annotation failed"}`);
