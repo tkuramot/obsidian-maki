@@ -264,7 +264,7 @@ interface BacklinkEntry { subpath: SubpathParams; color?: string; source: NoteRe
 
 // ObsidianNoteWriter (concrete) — over vault / editor
 class ObsidianNoteWriter {
-  insertIntoTarget(text: string, target: TargetStrategy): Promise<void> { … }
+  insertIntoActiveNote(text: string): Promise<void> { … }
   copyToClipboard(text: string): Promise<void> { … }
   /** FR-7.3: delete-from-preview = remove the link from its note. */
   removeLink(source: NoteRef, subpath: SubpathParams): Promise<void> { … }
@@ -324,7 +324,7 @@ class AnnotationService {
     const snippet = this.templates.expand(snippetTemplate, {
       link, text: sel.text, comment, color, …
     });
-    await this.notes.insertIntoTarget(snippet, targetStrategy);   // FR-4.2
+    await this.notes.insertIntoActiveNote(snippet);               // FR-4.2
   }
 }
 ```
@@ -544,11 +544,10 @@ collaborators to the core:
   `reconciler.detach(viewer)` (§4.5) and `viewer.destroy()`. Every subscription is a
   `Disposable` registered with the plugin, so unloading the plugin tears everything
   down in one pass.
-- **`ObsidianNoteWriter`** (concrete, §3.6): clipboard + insert into the target note
-  (editor when open, else `vault.process`), with the configurable target strategy
-  (FR-8.3). Injected into the core, not a port.
-- **Settings tab**: palette, templates, the on-selection action, the insert
-  target, EPUB rendering prefs (FR-8).
+- **`ObsidianNoteWriter`** (concrete, §3.6): clipboard + insert at the cursor of the
+  last-active markdown note (FR-4.2). Injected into the core, not a port.
+- **Settings tab**: palette, templates, the on-selection action, EPUB rendering
+  prefs (FR-8).
 - **Hover / backlink navigation** (FR-6): register hover-link sources and handle clicks
   on annotation links → `viewer.reveal`.
 
@@ -574,7 +573,7 @@ sequenceDiagram
   AS->>C: encode(locator)
   C-->>AS: subpath params
   AS->>AS: build link + expand template (pure)
-  AS->>NW: insertIntoTarget(snippet)
+  AS->>NW: insertIntoActiveNote(snippet)
   NW-->>U: snippet written to note
   Note over V: backlink index changes → reconcile (9.2)
 ```
@@ -779,9 +778,8 @@ Differences from the earlier sketch, and why:
 - **Settings need a schema version from day one.** Palette, templates, and reading
   positions are persisted plugin data; a `version` field costs one line now and makes
   every future settings migration cheap instead of a guessing game.
-- **Open:** exact target-selection strategy for insert; whether to offer a
-  dedicated annotations panel; whether `epub-native` should reuse `backend: 'epub'` or
-  be distinct.
+- **Open:** whether to offer a dedicated annotations panel; whether `epub-native`
+  should reuse `backend: 'epub'` or be distinct.
 
 ## 15. Dependencies
 

@@ -110,7 +110,7 @@ workflow, generalized so that PDF and EPUB behave the same way.
   to its locator (§6). Each annotate action has exactly one destination, named by the
   command's verb: **copy** to the clipboard, or **insert** into a target note.
 - **FR-4.2** **Insert** places the snippet into the target note without leaving
-  the preview (the target is the last-edited / last-active note, configurable).
+  the preview (the target is always the last-active markdown note).
 - **FR-4.3** Format the inserted snippet with a user-configurable **template** that
   can include the link, the quoted text, the color, page/chapter labels, and a
   comment placeholder (§6.6).
@@ -160,12 +160,13 @@ workflow, generalized so that PDF and EPUB behave the same way.
 
 - **FR-8.1** A configurable color palette (names → colors).
 - **FR-8.2** Configurable snippet and link-display templates (§6.6).
-- **FR-8.3** Target-selection strategy for insert, plus an
-  **annotate-on-selection mode** (`onSelect`: *off* / *copy* / *insert*): when not
-  off, a text selection that is confirmed in the preview — pointer released, then
-  briefly stable — acts as the corresponding annotate command (with the toolbar
-  color), no command needed. A selection still being dragged never fires. There are no
-  per-effect toggles — the destination of a command is fixed by its verb (FR-4.1).
+- **FR-8.3** An **annotate-on-selection mode** (`onSelect`: *off* / *copy* /
+  *insert*): when not off, a text selection that is confirmed in the preview —
+  pointer released, then briefly stable — acts as the corresponding annotate command
+  (with the toolbar color), no command needed. A selection still being dragged never
+  fires. There are no per-effect toggles — the destination of a command is fixed by
+  its verb (FR-4.1). Insert has no target setting either: it always goes to the
+  last-active markdown note (FR-4.2).
 - **FR-8.4** EPUB rendering preferences (columns, margins, font size, line height,
   theme follow).
 

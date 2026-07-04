@@ -5,9 +5,9 @@
  * `removeAnnotationLink` in the core.
  */
 
-import { MarkdownView, TFile, type App, type WorkspaceLeaf } from "obsidian";
+import { MarkdownView, type App, type WorkspaceLeaf } from "obsidian";
 import { removeAnnotationLink } from "../core/locator/link";
-import type { NoteRef, SubpathParams, TargetStrategy } from "../core/types";
+import type { NoteRef, SubpathParams } from "../core/types";
 
 /** Desktop-only escape hatch; null on mobile, where the caller's error surfaces. */
 function electronClipboard(): { writeText(text: string): void } | null {
@@ -39,20 +39,10 @@ export class ObsidianNoteWriter {
   }
 
   /**
-   * Insert the snippet into the target note: at the cursor when the
-   * note is open in an editor, appended otherwise. Throws when no target
-   * note can be determined — callers surface this as a notice.
+   * Insert the snippet at the cursor of the last-active markdown note.
+   * Throws when no markdown note is open — callers surface this as a notice.
    */
-  async insertIntoTarget(text: string, target: TargetStrategy): Promise<void> {
-    if (target.kind === "note") {
-      const file = this.app.vault.getFileByPath(target.path);
-      if (!file) throw new Error(`Target note not found: ${target.path}`);
-      const editor = this.editorFor(file);
-      if (editor) this.insertAtCursor(editor, text);
-      else await this.append(file, text);
-      return;
-    }
-
+  async insertIntoActiveNote(text: string): Promise<void> {
     const view = this.lastActiveMarkdownView();
     if (!view?.file) throw new Error("No markdown note is open to paste into");
     this.insertAtCursor(view, text);
@@ -67,7 +57,7 @@ export class ObsidianNoteWriter {
     });
   }
 
-  /** The most recently active markdown view (the default insert target). */
+  /** The most recently active markdown view (the insert target). */
   private lastActiveMarkdownView(): MarkdownView | null {
     const active = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (active) return active;
@@ -83,25 +73,11 @@ export class ObsidianNoteWriter {
     return best?.view ?? null;
   }
 
-  private editorFor(file: TFile): MarkdownView | null {
-    for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
-      const view = leaf.view;
-      if (view instanceof MarkdownView && view.file?.path === file.path) return view;
-    }
-    return null;
-  }
-
   private insertAtCursor(view: MarkdownView, text: string): void {
     const editor = view.editor;
     const cursor = editor.getCursor();
     const block = cursor.ch === 0 ? `${text}\n` : `\n${text}\n`;
     editor.replaceRange(block, cursor);
     editor.setCursor(editor.offsetToPos(editor.posToOffset(cursor) + block.length));
-  }
-
-  private async append(file: TFile, text: string): Promise<void> {
-    await this.app.vault.process(file, (content) =>
-      content === "" ? `${text}\n` : `${content.replace(/\n?$/, "\n")}\n${text}\n`,
-    );
   }
 }

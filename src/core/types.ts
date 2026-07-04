@@ -100,11 +100,6 @@ export interface BacklinkEntry {
   source: NoteRef;
 }
 
-/** Where note-destined snippets are inserted. */
-export type TargetStrategy =
-  | { kind: "active-note" }
-  | { kind: "note"; path: string };
-
 export interface Disposable {
   dispose(): void;
 }

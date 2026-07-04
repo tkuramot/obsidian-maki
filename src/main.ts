@@ -224,10 +224,6 @@ export default class MakiPlugin extends Plugin {
     return {
       snippetTemplate: s.snippetTemplate,
       displayTemplates: { ...s.displayTemplates },
-      target:
-        s.targetNotePath !== ""
-          ? { kind: "note", path: s.targetNotePath }
-          : { kind: "active-note" },
     };
   }
 

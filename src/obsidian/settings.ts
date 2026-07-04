@@ -38,8 +38,6 @@ export interface MakiSettings {
   displayTemplates: { pdf: string; epub: string };
   /** Annotate-on-selection mode: what selecting text does by itself. */
   onSelect: OnSelectAction;
-  /** Insert target: empty = last active markdown note. */
-  targetNotePath: string;
   epub: EpubPreferences;
   /** Last reading position per document path (EPUB: wrapped CFI). */
   readingPositions: Record<string, string>;
@@ -52,7 +50,6 @@ export const DEFAULT_SETTINGS: MakiSettings = {
   snippetTemplate: DEFAULT_ANNOTATION_SETTINGS.snippetTemplate,
   displayTemplates: { ...DEFAULT_ANNOTATION_SETTINGS.displayTemplates },
   onSelect: "off",
-  targetNotePath: "",
   epub: {
     flow: "paginated",
     maxColumnCount: 1,
@@ -152,20 +149,6 @@ export class MakiSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             await this.plugin.updateSettings((settings) => {
               settings.onSelect = value as OnSelectAction;
-            });
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("Note to insert links into")
-      .setDesc("Vault path of the target note. Leave empty for the last active markdown note.")
-      .addText((text) =>
-        text
-          .setPlaceholder("00 Inbox/Reading notes.md")
-          .setValue(s.targetNotePath)
-          .onChange(async (value) => {
-            await this.plugin.updateSettings((settings) => {
-              settings.targetNotePath = value.trim();
             });
           }),
       );

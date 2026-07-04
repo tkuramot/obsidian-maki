@@ -11,7 +11,7 @@ import type { Codecs } from "./locator/codec";
 import { EpubLocatorCodec } from "./locator/epub-codec";
 import { PdfLocatorCodec } from "./locator/pdf-codec";
 import { TemplateEngine } from "./template-engine";
-import type { Color, TargetStrategy } from "./types";
+import type { Color } from "./types";
 
 const codecs: Codecs = { pdf: PdfLocatorCodec, epub: EpubLocatorCodec };
 const colors = new ColorModel({ yellow: [255, 208, 0] });
@@ -19,10 +19,10 @@ const yellow: Color = { name: "yellow", rgb: [255, 208, 0] };
 
 class FakeNoteWriter implements NoteWriter {
   copied: string[] = [];
-  inserted: Array<{ text: string; target: TargetStrategy }> = [];
+  inserted: string[] = [];
 
-  insertIntoTarget(text: string, target: TargetStrategy): Promise<void> {
-    this.inserted.push({ text, target });
+  insertIntoActiveNote(text: string): Promise<void> {
+    this.inserted.push(text);
     return Promise.resolve();
   }
 
@@ -104,13 +104,10 @@ describe("AnnotationService", () => {
     expect(notes.inserted).toEqual([]);
   });
 
-  it("inserts into the configured target when the destination is the note (FR-4.2)", async () => {
-    settings.target = { kind: "note", path: "reading notes.md" };
+  it("inserts into the active note when the destination is the note (FR-4.2)", async () => {
     const result = await service.annotate(pdfViewer(), yellow, "note");
     expect(notes.copied).toEqual([]);
-    expect(notes.inserted).toEqual([
-      { text: result!.snippet, target: { kind: "note", path: "reading notes.md" } },
-    ]);
+    expect(notes.inserted).toEqual([result!.snippet]);
   });
 
   it("exposes comment and metadata variables to the snippet template (FR-4.3)", async () => {

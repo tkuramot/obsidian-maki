@@ -11,12 +11,7 @@ import type { DocumentViewer } from "./document-viewer";
 import type { Codecs } from "./locator/codec";
 import { buildLink } from "./locator/link";
 import { TemplateEngine, type TemplateVariables } from "./template-engine";
-import type {
-  BackendId,
-  Color,
-  TargetStrategy,
-  TextSelection,
-} from "./types";
+import type { BackendId, Color, TextSelection } from "./types";
 
 /**
  * The shape of `ObsidianNoteWriter` (a concrete class in the integration
@@ -24,7 +19,8 @@ import type {
  * injection, not a port.
  */
 export interface NoteWriter {
-  insertIntoTarget(text: string, target: TargetStrategy): Promise<void>;
+  /** Insert into the last-active markdown note (FR-4.2). */
+  insertIntoActiveNote(text: string): Promise<void>;
   copyToClipboard(text: string): Promise<void>;
 }
 
@@ -40,8 +36,6 @@ export interface AnnotationSettings {
   snippetTemplate: string;
   /** Template of the link alias (the text after `|`), per backend. */
   displayTemplates: Record<BackendId, string>;
-  /** Where `"note"`-destined snippets are inserted. */
-  target: TargetStrategy;
 }
 
 export const DEFAULT_ANNOTATION_SETTINGS: AnnotationSettings = {
@@ -50,7 +44,6 @@ export const DEFAULT_ANNOTATION_SETTINGS: AnnotationSettings = {
     pdf: "{{file.basename}}, p.{{page}}",
     epub: "{{file.basename}}, {{chapter}}",
   },
-  target: { kind: "active-note" },
 };
 
 export interface AnnotateResult {
@@ -140,7 +133,7 @@ export class AnnotationService {
     });
 
     if (destination === "clipboard") await notes.copyToClipboard(snippet);
-    else await notes.insertIntoTarget(snippet, s.target);
+    else await notes.insertIntoActiveNote(snippet);
 
     return { link: linkWithDisplay, snippet };
   }
