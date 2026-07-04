@@ -30,18 +30,26 @@ monkey-patch route), highlight hover previews (FR-7.2), PDF
 rectangular selection (FR-3.3), FR-10 (PDF embed), and manual verification in
 Obsidian itself.
 
-## Read the docs first
+## Core vocabulary
 
-The architecture cannot be understood from any single file. Before non-trivial work,
-read in this order:
+There is no longer a standalone spec/design doc (the `docs/` tree was removed); this
+file is the architectural source of truth. The terms below recur throughout the code and
+the rest of this document:
 
-1. **`docs/specification.md`** — *what* Maki does. Defines the terminology (document,
-   backend, locator, highlight, annotation, backlink) that everything else relies on,
-   the functional requirements (FR-1…FR-10), and — most importantly — **the link/locator
-   format (§6), which is a persisted data contract**.
-2. **`docs/design.md`** — *how* it is built: the ports-and-adapters architecture, the
-   pure core, the PDF/EPUB backends, the humble-object testability split, and the
-   proposed module layout (§13).
+- **Document** — an open PDF or EPUB the user is reading.
+- **Backend** — the machinery that renders one document kind (PDF via Obsidian's PDF.js;
+  EPUB via foliate-js). Identified by a `BackendId`.
+- **Locator** — a backend-specific, persisted pointer to an exact passage in a document
+  (a PDF page+rect/selection, or an EPUB CFI). Encoded into/decoded from note links by a
+  `LocatorCodec`.
+- **Highlight** — the colored overlay drawn over a document passage. Always a *projection*
+  of a link found in a note, never stored geometry.
+- **Annotation** — the act/record of linking a note passage to a document passage.
+- **Backlink** — the reverse index from a document to the notes that link into it, used to
+  know which highlights to draw.
+
+The architecture cannot be understood from any single file — read this whole document
+before non-trivial work.
 
 ## Architecture (the parts that span files)
 
@@ -57,16 +65,16 @@ Maki is **ports and adapters (hexagonal) around a pure core**, with one hard rul
   Shared vocabulary that no single module owns (`Locator`, `Highlight`, `Color`,
   `DocumentRef`, …) lives in `src/core/types.ts` — limited to that shared vocabulary, not
   a catch-all; module-owned types co-locate with their owner. Files are placed by *owner*,
-  not by "it's a type / a port" (design §13).
+  not by "it's a type / a port".
 - **Ports** (`src/core/document-viewer.ts`, `src/core/viewer-provider.ts`) —
   **only two** interface-only seams, one file each. These are the genuinely-polymorphic
   boundaries (PDF / EPUB / future native-EPUB). There is no `src/ports/` directory and no
-  pooled `ports.ts` — placement is by *owner*, not by "it's a port" (see design §13).
+  pooled `ports.ts` — placement is by *owner*, not by "it's a port".
 - **Injected concretes, *not* ports** — `LocatorCodec` is a structural dispatch type
   (`Record<BackendId, …>`), not an interface; `ObsidianBacklinkIndex` and
   `ObsidianNoteWriter` are concrete classes injected into the core. They have exactly one
   implementation forever, so they earn no port. The core stays testable because it is
-  *injected* (structural fakes), not because these are interfaces. See design §3.6 / §10.
+  *injected* (structural fakes), not because these are interfaces.
 - **Adapters / integration** (`src/backends/`, `src/obsidian/`) — *humble*:
   thin, logic-free bindings to Obsidian, PDF.js, foliate-js, the DOM, the filesystem.
 
@@ -86,13 +94,13 @@ exposes no pages, iframes, CFIs, or DOM nodes — those leak only into adapters.
   requires `@zip.js/zip.js` (regular npm dependency).
 
 A future native-Obsidian-EPUB backend is planned to slot in behind the same ports
-without touching the core (design §7, §12).
+without touching the core.
 
 ## Non-negotiable invariants
 
 These are easy to violate and expensive to get wrong:
 
-- **The link/locator format is a persisted contract** (spec §6). Users' notes store
+- **The link/locator format is a persisted contract.** Users' notes store
   these links, so changing the on-disk shape risks breaking existing notes. PDF subpaths
   reuse Obsidian's native conventions (`page`, `selection`, `rect`, …) for
   interoperability; EPUB uses one `epubcfi` key holding a **percent-encoded, unwrapped**
@@ -106,7 +114,8 @@ These are easy to violate and expensive to get wrong:
   belongs in `core/` and must be unit-tested with injected structural fakes — no
   framework mocks. If a
   piece touches a framework, it belongs in an adapter and must be trivial (no logic).
-  The "testability map" in design §10 is the authority on which side each concern lives.
+  When a concern's placement is ambiguous, decide by this rule: decisions in `core/`,
+  framework contact in adapters.
 - **EPUB security:** EPUB sections are arbitrary HTML/JS rendered in iframes and MUST be
   served under a strict CSP that blocks scripts. The section iframes are same-origin
   with Obsidian's node-integrated renderer, so a running book script means RCE. The
@@ -125,7 +134,9 @@ without a browser environment (`environment: "node"` in `vitest.config.ts`).
 
 Scripts:
 
-- `pnpm test` — run the unit suite once (`pnpm test:watch` to watch)
+- `pnpm test` — run the unit suite once (`pnpm test:watch` to watch). Run a single file
+  or test with Vitest's filters, e.g. `pnpm test src/core/locator/pdf-codec.test.ts` or
+  `pnpm test -t "round-trips"`
 - `pnpm typecheck` — `tsc --noEmit` (strict, incl. `noUncheckedIndexedAccess`)
 - `pnpm build` — typecheck + production esbuild bundle to `main.js`
 - `pnpm dev` — esbuild watch mode
@@ -144,8 +155,8 @@ type-checks fine and fails at runtime). Update flow: rebase the fork's `maki` on
 upstream → tag → bump the submodule pin → `pnpm test && pnpm build` → open an EPUB
 manually.
 
-The full dependency policy — what is depended on, what was rejected and why, and what
-is deliberately absent (no template engine, no CFI parser, no UI framework, no bundled
-PDF.js) — is design §15. Runtime dependencies are intentionally minimal:
+The dependency policy is deliberately minimalist — several things are *intentionally
+absent*: no template engine, no CFI parser, no UI framework, no bundled PDF.js (the
+built-in one is reused). Runtime dependencies are intentionally minimal:
 `monkey-around` + `@zip.js/zip.js` + the foliate-js submodule; `@cantoo/pdf-lib` (not
 upstream pdf-lib, which is unmaintained) is deferred until FR-10.
