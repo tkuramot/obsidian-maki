@@ -77,8 +77,8 @@ workflow, generalized so that PDF and EPUB behave the same way.
 ### FR-1 — Preview documents
 
 - **FR-1.1** Open a PDF in the preview using Obsidian's native PDF viewer.
-- **FR-1.2** Open an EPUB in the preview, with reflowable pagination (configurable
-  column count, margins, font) and fixed-layout support.
+- **FR-1.2** Open an EPUB in the preview, with reflowable pagination (responsive
+  column count and margins, configurable font size) and fixed-layout support.
 - **FR-1.3** Open documents from the file explorer, from links, and as embeds where
   the backend allows it.
 - **FR-1.4** Remember and restore the last reading position per document (PDF: page +
@@ -167,8 +167,10 @@ workflow, generalized so that PDF and EPUB behave the same way.
   fires. There are no per-effect toggles — the destination of a command is fixed by
   its verb (FR-4.1). Insert has no target setting either: it always goes to the
   last-active markdown note (FR-4.2).
-- **FR-8.4** EPUB rendering preferences (columns, margins, font size, line height,
-  theme follow).
+- **FR-8.4** EPUB rendering preferences (flow, font size, theme follow), adjusted
+  from the viewer's display-options menu, not the settings tab. Layout metrics
+  (columns, margins, line height) are not preferences — foliate's responsive
+  defaults apply.
 
 ### FR-9 — Commands and UI
 

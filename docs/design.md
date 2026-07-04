@@ -546,8 +546,8 @@ collaborators to the core:
   down in one pass.
 - **`ObsidianNoteWriter`** (concrete, §3.6): clipboard + insert at the cursor of the
   last-active markdown note (FR-4.2). Injected into the core, not a port.
-- **Settings tab**: palette, templates, the on-selection action, EPUB rendering
-  prefs (FR-8).
+- **Settings tab**: palette, templates, the on-selection action (FR-8). EPUB
+  rendering prefs (FR-8.4) live in the viewer's display-options menu, not the tab.
 - **Hover / backlink navigation** (FR-6): register hover-link sources and handle clicks
   on annotation links → `viewer.reveal`.
 

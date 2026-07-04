@@ -1,7 +1,8 @@
 /**
  * `MakiEpubView` — the plugin-owned `ItemView` hosting `<foliate-view>`.
- * Owns the reader chrome (mirroring the native PDF viewer's toolbar: TOC
- * menu, prev/next, page input, display options), restores the reading
+ * Owns the reader chrome (mirroring the native PDF viewer's toolbar and
+ * sidebar: sidebar toggle + TOC tree, prev/next, page input, font size,
+ * display options), restores the reading
  * position, applies rendering preferences and theme follow, and hands the
  * adapter to the provider.
  * All humble — presentation of foliate state, no decisions.
@@ -36,15 +37,17 @@ import { makeVaultZipLoader, type VaultZipLoader } from "./vault-zip-loader";
 export const MAKI_EPUB_VIEW_TYPE = "maki-epub";
 
 /** Rendering preferences, as this view needs them. The settings
- * object satisfies this structurally. */
+ * object satisfies this structurally. Layout metrics (columns, margins,
+ * line height) are not preferences — foliate's responsive defaults apply. */
 export interface EpubViewPreferences {
   flow: "paginated" | "scrolled";
-  maxColumnCount: number;
   fontSizePercent: number;
-  lineHeight: number;
-  marginPx: number;
   followTheme: boolean;
 }
+
+const FONT_SIZE_STEP = 10;
+const FONT_SIZE_MIN = 50;
+const FONT_SIZE_MAX = 200;
 
 /** What the integration layer injects into the view. */
 export interface EpubViewDeps {
@@ -66,9 +69,16 @@ export class MakiEpubView extends FileView {
   private adapter: EpubViewerAdapter | null = null;
   private loader: VaultZipLoader | null = null;
   private toc: FoliateTocItem[] = [];
-  private currentTocHref: string | null = null;
+  private contentContainerEl: HTMLElement | null = null;
+  private sidebarToggleEl: HTMLElement | null = null;
+  private readonly tocSelfEls = new Map<string, HTMLElement>();
+  private activeTocSelfEl: HTMLElement | null = null;
+  /** Survives re-mounts of the same view (file switches). */
+  private sidebarOpen = false;
   private pageInputEl: HTMLInputElement | null = null;
   private pageCountEl: HTMLElement | null = null;
+  private fontDownEl: HTMLElement | null = null;
+  private fontUpEl: HTMLElement | null = null;
   private chapterEl: HTMLElement | null = null;
   private colorPicker: Disposable | null = null;
   private locationTotal = 0;
@@ -143,12 +153,14 @@ export class MakiEpubView extends FileView {
 
   /** Re-apply rendering preferences (called on settings changes). */
   applyPreferences(): void {
+    const prefs = this.deps.prefs();
+    // Same disabled treatment as the native toolbar's zoom buttons at
+    // MIN_SCALE / MAX_SCALE.
+    this.fontDownEl?.toggleClass("mod-disabled", prefs.fontSizePercent <= FONT_SIZE_MIN);
+    this.fontUpEl?.toggleClass("mod-disabled", prefs.fontSizePercent >= FONT_SIZE_MAX);
     const renderer = this.foliate?.renderer;
     if (!renderer) return;
-    const prefs = this.deps.prefs();
     renderer.setAttribute("flow", prefs.flow === "scrolled" ? "scrolled" : "paginated");
-    renderer.setAttribute("max-column-count", String(prefs.maxColumnCount));
-    renderer.setAttribute("margin", `${prefs.marginPx}px`);
     renderer.setStyles?.(this.bookCss(prefs));
   }
 
@@ -166,10 +178,13 @@ export class MakiEpubView extends FileView {
     const left = toolbar.createDiv({ cls: "pdf-toolbar-left" });
     const right = toolbar.createDiv({ cls: "pdf-toolbar-right" });
 
-    const tocBtn = left.createDiv({ cls: "clickable-icon" });
-    setIcon(tocBtn, "lucide-list");
-    setTooltip(tocBtn, "Table of contents");
-    tocBtn.addEventListener("click", () => this.showTocMenu(tocBtn));
+    // Same control as the native PDF toolbar's sidebar toggle (its icon,
+    // tooltip, and is-active state) — the TOC lives in the sidebar it opens.
+    const sidebarBtn = left.createDiv({ cls: "clickable-icon" });
+    setIcon(sidebarBtn, "lucide-layout-list");
+    setTooltip(sidebarBtn, "Toggle sidebar");
+    sidebarBtn.addEventListener("click", () => this.toggleSidebar());
+    this.sidebarToggleEl = sidebarBtn;
 
     left.createDiv({ cls: "pdf-toolbar-spacer" });
 
@@ -180,6 +195,20 @@ export class MakiEpubView extends FileView {
     const nextBtn = left.createDiv({ cls: "clickable-icon" });
     setIcon(nextBtn, "lucide-chevron-right");
     setTooltip(nextBtn, "Next page");
+
+    // Font size controls, in the native toolbar's zoom-button slot (spacer,
+    // zoom-out, divider, zoom-in, right before the display-options chevron)
+    // and with its icons — font size is the reflowable analogue of zoom.
+    left.createDiv({ cls: "pdf-toolbar-spacer" });
+    this.fontDownEl = left.createDiv({ cls: "clickable-icon" });
+    setIcon(this.fontDownEl, "lucide-zoom-out");
+    setTooltip(this.fontDownEl, "Decrease font size");
+    this.fontDownEl.addEventListener("click", () => this.adjustFontSize(-FONT_SIZE_STEP));
+    left.createDiv({ cls: "pdf-toolbar-divider" });
+    this.fontUpEl = left.createDiv({ cls: "clickable-icon" });
+    setIcon(this.fontUpEl, "lucide-zoom-in");
+    setTooltip(this.fontUpEl, "Increase font size");
+    this.fontUpEl.addEventListener("click", () => this.adjustFontSize(FONT_SIZE_STEP));
 
     const displayBtn = left.createDiv({ cls: "clickable-icon" });
     setIcon(displayBtn, "lucide-chevron-down");
@@ -202,7 +231,25 @@ export class MakiEpubView extends FileView {
     this.colorPicker = this.deps.mountColorPicker(right);
     this.chapterEl = right.createSpan({ cls: "maki-epub-chapter" });
 
-    const bookEl = contentEl.createDiv({ cls: "maki-epub-book" });
+    // The book area mirrors the native PDF viewer's sidebar DOM
+    // (.pdf-content-container > .pdf-viewer-container + .pdf-sidebar-container),
+    // so Obsidian's own styles drive the slide-in, the viewer shift, and the
+    // resizer — the sidebar hosts the TOC as a standard Obsidian tree, like
+    // the PDF outline view.
+    const bookHost = contentEl.createDiv({ cls: "maki-epub-book" });
+    const content = bookHost.createDiv({ cls: "pdf-content-container" });
+    // The width the native sidebar uses when showing the PDF outline.
+    content.style.setProperty("--sidebar-width", "275px");
+    const bookEl = content.createDiv({ cls: "pdf-viewer-container" });
+    const sidebar = content.createDiv({ cls: "pdf-sidebar-container" });
+    this.bindSidebarResizer(sidebar.createDiv({ cls: "pdf-sidebar-resizer" }), content);
+    const outlineEl = sidebar
+      .createDiv({ cls: "pdf-sidebar-content-wrapper" })
+      .createDiv({ cls: "pdf-sidebar-content" })
+      .createDiv({ cls: "pdf-outline-view" });
+    this.contentContainerEl = content;
+    content.toggleClass("sidebarOpen", this.sidebarOpen);
+    sidebarBtn.toggleClass("is-active", this.sidebarOpen);
 
     const bytes = await this.app.vault.readBinary(file);
     this.loader = await makeVaultZipLoader(new File([bytes], file.name));
@@ -242,6 +289,7 @@ export class MakiEpubView extends FileView {
     await foliate.open(book);
     this.applyPreferences();
     this.toc = book.toc ?? [];
+    this.renderOutline(outlineEl);
 
     const lastLocation = this.deps.getPosition(file.path);
     await foliate.init(
@@ -266,11 +314,16 @@ export class MakiEpubView extends FileView {
     void this.loader?.close().catch(() => undefined);
     this.loader = null;
     this.toc = [];
-    this.currentTocHref = null;
+    this.tocSelfEls.clear();
+    this.activeTocSelfEl = null;
+    this.contentContainerEl = null;
+    this.sidebarToggleEl = null;
     this.colorPicker?.dispose();
     this.colorPicker = null;
     this.pageInputEl = null;
     this.pageCountEl = null;
+    this.fontDownEl = null;
+    this.fontUpEl = null;
     this.chapterEl = null;
     this.locationTotal = 0;
   }
@@ -299,30 +352,85 @@ export class MakiEpubView extends FileView {
 
   // ---- chrome --------------------------------------------------------------
 
-  private showTocMenu(anchor: HTMLElement): void {
-    const foliate = this.foliate;
-    if (!foliate) return;
-    const menu = new Menu();
+  private toggleSidebar(): void {
+    this.sidebarOpen = !this.sidebarOpen;
+    this.contentContainerEl?.toggleClass("sidebarOpen", this.sidebarOpen);
+    this.sidebarToggleEl?.toggleClass("is-active", this.sidebarOpen);
+    if (this.sidebarOpen) this.activeTocSelfEl?.scrollIntoView({ block: "nearest" });
+  }
+
+  /** The TOC as a standard Obsidian tree, like the native PDF outline view. */
+  private renderOutline(container: HTMLElement): void {
+    container.empty();
+    this.tocSelfEls.clear();
+    this.activeTocSelfEl = null;
     if (this.toc.length === 0) {
-      menu.addItem((item) => item.setTitle("No table of contents").setDisabled(true));
+      container.createDiv({ cls: "maki-epub-outline-empty", text: "No table of contents" });
+      return;
     }
-    const addItems = (items: FoliateTocItem[], depth: number): void => {
+    const addItems = (parent: HTMLElement, items: FoliateTocItem[]): void => {
       for (const entry of items) {
+        const item = parent.createDiv({ cls: "tree-item" });
+        const self = item.createDiv({ cls: "tree-item-self" });
+        const children = entry.subitems ?? [];
+        if (children.length > 0) {
+          self.addClass("mod-collapsible");
+          const toggle = self.createDiv({ cls: "tree-item-icon collapse-icon" });
+          setIcon(toggle, "right-triangle");
+          toggle.addEventListener("click", (evt) => {
+            evt.stopPropagation();
+            const collapsed = !item.hasClass("is-collapsed");
+            item.toggleClass("is-collapsed", collapsed);
+            toggle.toggleClass("is-collapsed", collapsed);
+          });
+        }
+        self.createDiv({ cls: "tree-item-inner", text: entry.label?.trim() ?? "\u2026" });
         const href = entry.href;
-        menu.addItem((item) => {
-          // em-space indentation: menus have no tree widget
-          item.setTitle("\u2003".repeat(depth) + (entry.label?.trim() ?? "\u2026"));
-          if (href === undefined) item.setDisabled(true);
-          else {
-            item.setChecked(href === this.currentTocHref ? true : null);
-            item.onClick(() => void foliate.goTo(href));
-          }
-        });
-        if (entry.subitems) addItems(entry.subitems, depth + 1);
+        if (href !== undefined) {
+          self.addClass("is-clickable");
+          this.tocSelfEls.set(href, self);
+          self.addEventListener("click", () => void this.foliate?.goTo(href));
+        }
+        if (children.length > 0) addItems(item.createDiv({ cls: "tree-item-children" }), children);
       }
     };
-    addItems(this.toc, 0);
-    this.showBelow(menu, anchor);
+    addItems(container, this.toc);
+  }
+
+  /** Mark (and reveal) the chapter being read, as the PDF outline does. */
+  private setActiveTocItem(href: string | null): void {
+    const next = href !== null ? (this.tocSelfEls.get(href) ?? null) : null;
+    if (next === this.activeTocSelfEl) return;
+    this.activeTocSelfEl?.removeClass("mod-active");
+    this.activeTocSelfEl = next;
+    next?.addClass("mod-active");
+    if (this.sidebarOpen) next?.scrollIntoView({ block: "nearest" });
+  }
+
+  /** Drag-resize via the native resizer handle: update `--sidebar-width`
+   * (what both the sidebar and the shifted viewer read) and suppress the
+   * slide transition while dragging, exactly as pdf.js's sidebar does. */
+  private bindSidebarResizer(resizer: HTMLElement, container: HTMLElement): void {
+    resizer.addEventListener("pointerdown", (down) => {
+      down.preventDefault();
+      // Capture keeps the drag alive over the section iframes.
+      resizer.setPointerCapture(down.pointerId);
+      container.addClass("sidebarResizing");
+      const rtl = getComputedStyle(container).direction === "rtl";
+      const onMove = (move: PointerEvent): void => {
+        const rect = container.getBoundingClientRect();
+        const width = rtl ? rect.right - move.clientX : move.clientX - rect.left;
+        const clamped = Math.max(150, Math.min(width, rect.width / 2));
+        container.style.setProperty("--sidebar-width", `${Math.round(clamped)}px`);
+      };
+      const onUp = (): void => {
+        container.removeClass("sidebarResizing");
+        resizer.removeEventListener("pointermove", onMove);
+        resizer.removeEventListener("pointerup", onUp);
+      };
+      resizer.addEventListener("pointermove", onMove);
+      resizer.addEventListener("pointerup", onUp);
+    });
   }
 
   private showDisplayMenu(anchor: HTMLElement): void {
@@ -357,6 +465,13 @@ export class MakiEpubView extends FileView {
     this.showBelow(menu, anchor);
   }
 
+  /** Step the font size preference, clamped to [FONT_SIZE_MIN, FONT_SIZE_MAX]. */
+  private adjustFontSize(delta: number): void {
+    const current = this.deps.prefs().fontSizePercent;
+    const next = Math.min(Math.max(current + delta, FONT_SIZE_MIN), FONT_SIZE_MAX);
+    if (next !== current) this.deps.updatePrefs((p) => (p.fontSizePercent = next));
+  }
+
   /** Drop a menu under a toolbar button, as the native PDF toolbar does. */
   private showBelow(menu: Menu, anchor: HTMLElement): void {
     const rect = anchor.getBoundingClientRect();
@@ -381,7 +496,7 @@ export class MakiEpubView extends FileView {
       this.pageInputEl.value = String(Math.min(loc.current + 1, loc.total));
       this.pageCountEl.setText(`of ${loc.total}`);
     }
-    this.currentTocHref = location.tocItem?.href ?? null;
+    this.setActiveTocItem(location.tocItem?.href ?? null);
     if (this.chapterEl) {
       const percent =
         typeof location.fraction === "number"
@@ -425,7 +540,7 @@ export class MakiEpubView extends FileView {
       : "";
     return `
       html { color-scheme: ${isDark && prefs.followTheme ? "dark" : "light"}; font-size: ${prefs.fontSizePercent}%; }
-      p, li, blockquote, dd { line-height: ${prefs.lineHeight}; }
+      p, li, blockquote, dd { line-height: 1.5; }
       ${themeCss}
     `;
   }

@@ -57,6 +57,19 @@
   height: 100%;
 }
 
+/* The TOC sidebar reuses the native .pdf-content-container / .pdf-sidebar-*
+ * / .pdf-outline-view styles wholesale. Obsidian's own tree views hide
+ * collapsed children by detaching them from the DOM; our tree is static
+ * markup, so collapsing needs one rule. */
+.maki-epub-view .tree-item.is-collapsed > .tree-item-children {
+  display: none;
+}
+
+.maki-epub-outline-empty {
+  color: var(--text-muted);
+  padding: var(--size-4-2);
+}
+
 .maki-epub-error {
   padding: var(--size-4-4);
   color: var(--text-error);

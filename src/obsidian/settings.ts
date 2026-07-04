@@ -9,18 +9,14 @@ import { DEFAULT_ANNOTATION_SETTINGS } from "../core/annotation-service";
 import { DEFAULT_PALETTE, type Palette } from "../core/color-model";
 import type MakiPlugin from "../main";
 
-/** EPUB rendering preferences. */
+/** EPUB rendering preferences. No settings-tab UI — all of them are adjusted
+ * from the viewer toolbar's display-options menu; layout metrics (columns,
+ * margins, line height) follow fixed foliate defaults and are not preferences. */
 export interface EpubPreferences {
-  /** Reading flow: page-flipping columns or a continuous scroll.
-   * No settings-tab UI — toggled from the viewer toolbar's display options. */
+  /** Reading flow: page-flipping columns or a continuous scroll. */
   flow: "paginated" | "scrolled";
-  /** Maximum column count of the paginated layout. */
-  maxColumnCount: number;
   /** Font size in percent of the theme default (100 = unchanged). */
   fontSizePercent: number;
-  lineHeight: number;
-  /** Page margin in pixels. */
-  marginPx: number;
   /** Follow Obsidian's light/dark theme inside the book. */
   followTheme: boolean;
 }
@@ -52,10 +48,7 @@ export const DEFAULT_SETTINGS: MakiSettings = {
   onSelect: "off",
   epub: {
     flow: "paginated",
-    maxColumnCount: 1,
     fontSizePercent: 100,
-    lineHeight: 1.5,
-    marginPx: 48,
     followTheme: true,
   },
   readingPositions: {},
@@ -153,74 +146,6 @@ export class MakiSettingTab extends PluginSettingTab {
           }),
       );
 
-    new Setting(containerEl).setName("EPUB").setHeading();
-
-    new Setting(containerEl)
-      .setName("Maximum column count")
-      .addSlider((slider) =>
-        slider
-          .setLimits(1, 3, 1)
-          .setDynamicTooltip()
-          .setValue(s.epub.maxColumnCount)
-          .onChange(async (value) => {
-            await this.plugin.updateSettings((settings) => {
-              settings.epub.maxColumnCount = value;
-            });
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("Font size (%)")
-      .addSlider((slider) =>
-        slider
-          .setLimits(50, 200, 5)
-          .setDynamicTooltip()
-          .setValue(s.epub.fontSizePercent)
-          .onChange(async (value) => {
-            await this.plugin.updateSettings((settings) => {
-              settings.epub.fontSizePercent = value;
-            });
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("Line height")
-      .addSlider((slider) =>
-        slider
-          .setLimits(1, 2.5, 0.1)
-          .setDynamicTooltip()
-          .setValue(s.epub.lineHeight)
-          .onChange(async (value) => {
-            await this.plugin.updateSettings((settings) => {
-              settings.epub.lineHeight = value;
-            });
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("Page margin (px)")
-      .addSlider((slider) =>
-        slider
-          .setLimits(0, 120, 4)
-          .setDynamicTooltip()
-          .setValue(s.epub.marginPx)
-          .onChange(async (value) => {
-            await this.plugin.updateSettings((settings) => {
-              settings.epub.marginPx = value;
-            });
-          }),
-      );
-
-    new Setting(containerEl)
-      .setName("Follow Obsidian theme")
-      .setDesc("Apply the vault's light/dark colors to the book.")
-      .addToggle((toggle) =>
-        toggle.setValue(s.epub.followTheme).onChange(async (value) => {
-          await this.plugin.updateSettings((settings) => {
-            settings.epub.followTheme = value;
-          });
-        }),
-      );
   }
 
   /**
