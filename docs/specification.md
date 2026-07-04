@@ -162,8 +162,9 @@ workflow, generalized so that PDF and EPUB behave the same way.
 - **FR-8.2** Configurable snippet and link-display templates (§6.6).
 - **FR-8.3** Target-selection strategy for insert, plus an
   **annotate-on-selection mode** (`onSelect`: *off* / *copy* / *insert*): when not
-  off, a text selection that settles in the preview acts as the corresponding
-  annotate command (with the toolbar color), no command needed. There are no
+  off, a text selection that is confirmed in the preview — pointer released, then
+  briefly stable — acts as the corresponding annotate command (with the toolbar
+  color), no command needed. A selection still being dragged never fires. There are no
   per-effect toggles — the destination of a command is fixed by its verb (FR-4.1).
 - **FR-8.4** EPUB rendering preferences (columns, margins, font size, line height,
   theme follow).

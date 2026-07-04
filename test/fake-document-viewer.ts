@@ -48,6 +48,10 @@ export class FakeDocumentViewer implements DocumentViewer {
     return { dispose: () => {} };
   }
 
+  onSelectionDrag(_cb: (dragging: boolean) => void): Disposable {
+    return { dispose: () => {} };
+  }
+
   drawHighlight(h: Highlight): void {
     this.calls.push({ op: "draw", highlight: h });
     this.highlights.set(h.id, h);

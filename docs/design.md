@@ -181,6 +181,9 @@ interface DocumentViewer {
   captureSelection(): TextSelection | null;
   /** Fires whenever the live selection changes (for annotate-on-selection, palette state). */
   onSelectionChange(cb: (sel: TextSelection | null) => void): Disposable;
+  /** Fires when a pointer press adjusting the selection starts/releases —
+   *  a raw fact; annotate-on-selection holds fire while `true`. */
+  onSelectionDrag(cb: (dragging: boolean) => void): Disposable;
 
   /** Draw / erase highlights (FR-5.2, FR-5.3). Idempotent by id. */
   drawHighlight(h: Highlight): void;
@@ -421,7 +424,8 @@ mandatory.
 | `reveal(loc)` | Translate the locator into a PDF.js destination and scroll; flash via the native highlight method. |
 | `drawHighlight(h)` | Ask `PdfGeometry` (pure) for rects, then inject absolutely-positioned `<div>`s into a per-page overlay layer. |
 | `onHighlightActivate` | Click handler on the injected overlay elements. |
-| `onSelectionChange` | `pointerup` / `selectionchange` listeners on the viewer container. |
+| `onSelectionChange` | `selectionchange` listener on the viewer's document. |
+| `onSelectionDrag` | `pointerdown` on a page / `pointerup` on the document — reported raw, no drag logic. |
 | Re-apply on page render | PDF.js **virtualizes pages** — offscreen pages are destroyed together with any injected overlay. A `pagerendered` listener re-injects that page's current highlights (the PDF mirror of EPUB's `create-overlay`, §6.2). |
 
 The adapter contains **no annotation logic** — it only converts between Obsidian/PDF.js
@@ -610,7 +614,7 @@ The rule: **every framework boundary is a thin adapter; the logic behind it is p
 | Concern | Humble object (no logic, not unit-tested) | Pure core (unit-tested) |
 | --- | --- | --- |
 | Create annotation | `captureSelection`, `ObsidianNoteWriter` | `AnnotationService`, link build, template |
-| Annotate on selection | `selectionchange` listeners (adapters), the timer | `SelectionAutoAnnotator` (settle, once-per-selection, toggle) |
+| Annotate on selection | `selectionchange` / pointer listeners (adapters), the timer | `SelectionAutoAnnotator` (hold-while-dragging, settle, once-per-selection, toggle) |
 | Render highlights | `drawHighlight` / `eraseHighlight`, `ObsidianBacklinkIndex` | `HighlightReconciler` (decode, id, diff, merge) |
 | Link format | — | `LocatorCodec` (encode/decode, CFI encoding) |
 | PDF geometry | acquire text boxes, inject `<div>`s | `PdfGeometry` (rects, merging) |
@@ -641,7 +645,7 @@ it contains a decision, it belongs in the right column.
     `draw`/`erase` calls on a fake `DocumentViewer` and the returned skip counts
     (FR-5.5).
   - `AnnotationService`: selection → snippet, with fake viewer/codec/writer.
-  - `SelectionAutoAnnotator`: settle debounce, one fire per selection, re-arm on
+  - `SelectionAutoAnnotator`: hold while dragging, settle debounce, one fire per selection, re-arm on
     clear, runtime toggle — with an injected scheduler.
   - `TemplateEngine`, `ColorModel`, `PdfGeometry`: pure I/O tables and fixtures.
 - **Shared contract suites.** A suite any `DocumentViewer` implementation must pass (the

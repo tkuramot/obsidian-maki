@@ -110,9 +110,13 @@ export default class MakiPlugin extends Plugin {
       (viewer, id) => this.openHighlightSources(viewer, id),
       (viewer) => {
         const sub = viewer.onSelectionChange((sel) => autoAnnotator.onSelection(viewer, sel));
+        const drag = viewer.onSelectionDrag((dragging) =>
+          autoAnnotator.onDragChange(viewer, dragging),
+        );
         return {
           dispose: () => {
             sub.dispose();
+            drag.dispose();
             autoAnnotator.detach(viewer);
           },
         };

@@ -61,6 +61,7 @@ export class PdfViewerAdapter implements DocumentViewer {
   private readonly highlights = new Map<HighlightId, Highlight>();
   private readonly activateCbs = new Set<(id: HighlightId) => void>();
   private readonly selectionCbs = new Set<(sel: TextSelection | null) => void>();
+  private readonly dragCbs = new Set<(dragging: boolean) => void>();
   private readonly textItemCache = new Map<number, Promise<TextItemBox[]>>();
   /**
    * The last live selection, kept when another pane steals the (window-wide)
@@ -112,12 +113,22 @@ export class PdfViewerAdapter implements DocumentViewer {
         if (!(event.target instanceof Element) || !event.target.closest(".page")) return;
         this.remembered = null;
         for (const cb of this.selectionCbs) cb(null);
+        for (const cb of this.dragCbs) cb(true);
+      };
+      // Release is document-level: a selection drag routinely ends outside
+      // the page it started on. Spurious releases are the consumer's no-op.
+      const onPointerUp = (): void => {
+        for (const cb of this.dragCbs) cb(false);
       };
       doc.addEventListener("selectionchange", onSelectionChange);
       container.addEventListener("pointerdown", onPointerDown);
+      doc.addEventListener("pointerup", onPointerUp);
+      doc.addEventListener("pointercancel", onPointerUp);
       this.disposers.push(() => {
         doc.removeEventListener("selectionchange", onSelectionChange);
         container.removeEventListener("pointerdown", onPointerDown);
+        doc.removeEventListener("pointerup", onPointerUp);
+        doc.removeEventListener("pointercancel", onPointerUp);
       });
     }
   }
@@ -250,6 +261,11 @@ export class PdfViewerAdapter implements DocumentViewer {
   onSelectionChange(cb: (sel: TextSelection | null) => void): Disposable {
     this.selectionCbs.add(cb);
     return { dispose: () => this.selectionCbs.delete(cb) };
+  }
+
+  onSelectionDrag(cb: (dragging: boolean) => void): Disposable {
+    this.dragCbs.add(cb);
+    return { dispose: () => this.dragCbs.delete(cb) };
   }
 
   private pageElOf(node: Node): HTMLElement | null {
@@ -417,5 +433,6 @@ export class PdfViewerAdapter implements DocumentViewer {
     this.disposers.length = 0;
     this.activateCbs.clear();
     this.selectionCbs.clear();
+    this.dragCbs.clear();
   }
 }

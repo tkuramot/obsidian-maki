@@ -132,4 +132,89 @@ describe("SelectionAutoAnnotator", () => {
     scheduler.settle();
     expect(annotated).toEqual([]);
   });
+
+  it("holds fire while the pointer is down, fires after release settles", () => {
+    const { scheduler, annotated, annotator, viewer } = setup();
+    annotator.onDragChange(viewer, true);
+    annotator.onSelection(viewer, sel("h"));
+    annotator.onSelection(viewer, sel("hello"));
+    scheduler.settle(); // pausing mid-drag must not annotate
+    expect(annotated).toEqual([]);
+    annotator.onDragChange(viewer, false);
+    expect(annotated).toEqual([]); // release arms the window, not the fire
+    scheduler.settle();
+    expect(annotated).toEqual([viewer]);
+  });
+
+  it("coalesces a selection event trailing the release into one fire", () => {
+    const { scheduler, annotated, annotator, viewer } = setup();
+    annotator.onDragChange(viewer, true);
+    annotator.onSelection(viewer, sel("hell"));
+    annotator.onDragChange(viewer, false);
+    annotator.onSelection(viewer, sel("hello")); // selectionchange after pointerup
+    scheduler.settle();
+    expect(annotated).toHaveLength(1);
+  });
+
+  it("a new press cancels the pending fire of the previous release", () => {
+    const { scheduler, annotated, annotator, viewer } = setup();
+    annotator.onDragChange(viewer, true);
+    annotator.onSelection(viewer, sel("hello"));
+    annotator.onDragChange(viewer, false);
+    annotator.onDragChange(viewer, true); // user extends before the window elapses
+    scheduler.settle();
+    expect(annotated).toEqual([]);
+    annotator.onSelection(viewer, sel("hello world"));
+    annotator.onDragChange(viewer, false);
+    scheduler.settle();
+    expect(annotated).toEqual([viewer]);
+  });
+
+  it("a release with nothing held does nothing", () => {
+    const { scheduler, annotated, annotator, viewer } = setup();
+    annotator.onDragChange(viewer, true);
+    annotator.onDragChange(viewer, false);
+    scheduler.settle();
+    expect(annotated).toEqual([]);
+  });
+
+  it("a stray release does not disturb an armed non-drag selection", () => {
+    const { scheduler, annotated, annotator, viewer } = setup();
+    annotator.onSelection(viewer, sel("hello")); // keyboard selection: no drag
+    annotator.onDragChange(viewer, false); // doc-level pointerup elsewhere
+    scheduler.settle();
+    expect(annotated).toEqual([viewer]);
+  });
+
+  it("a selection cleared during the drag is not fired on release", () => {
+    const { scheduler, annotated, annotator, viewer } = setup();
+    annotator.onDragChange(viewer, true);
+    annotator.onSelection(viewer, sel("hello"));
+    annotator.onSelection(viewer, null);
+    annotator.onDragChange(viewer, false);
+    scheduler.settle();
+    expect(annotated).toEqual([]);
+  });
+
+  it("dragging back to the already-annotated selection does not refire", () => {
+    const { scheduler, annotated, annotator, viewer } = setup();
+    annotator.onSelection(viewer, sel("hello"));
+    scheduler.settle();
+    annotator.onDragChange(viewer, true);
+    annotator.onSelection(viewer, sel("hello world"));
+    annotator.onSelection(viewer, sel("hello")); // shrunk back to the annotated one
+    annotator.onDragChange(viewer, false);
+    scheduler.settle();
+    expect(annotated).toHaveLength(1);
+  });
+
+  it("stays quiet when the mode is toggled off during the drag", () => {
+    const { state, scheduler, annotated, annotator, viewer } = setup();
+    annotator.onDragChange(viewer, true);
+    annotator.onSelection(viewer, sel("hello"));
+    state.enabled = false;
+    annotator.onDragChange(viewer, false);
+    scheduler.settle();
+    expect(annotated).toEqual([]);
+  });
 });

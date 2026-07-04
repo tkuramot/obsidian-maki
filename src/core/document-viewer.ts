@@ -62,6 +62,14 @@ export interface DocumentViewer {
   captureSelection(): TextSelection | null;
   /** Fires whenever the live selection changes (for annotate-on-selection, palette state). */
   onSelectionChange(cb: (sel: TextSelection | null) => void): Disposable;
+  /**
+   * Fires when a pointer press that may be adjusting the selection starts
+   * (`true`) and when it releases (`false`). A raw pointer fact — whether and
+   * when to act on the in-flight selection is the core's decision
+   * (annotate-on-selection holds fire while `true`). Releases may be reported
+   * without a matching press; consumers must treat those as no-ops.
+   */
+  onSelectionDrag(cb: (dragging: boolean) => void): Disposable;
 
   /**
    * Draw / erase highlights. Idempotent by id: drawing an

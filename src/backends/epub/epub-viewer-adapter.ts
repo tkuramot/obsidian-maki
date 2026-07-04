@@ -57,6 +57,7 @@ export class EpubViewerAdapter implements DocumentViewer {
   private readonly idByValue = new Map<string, HighlightId>();
   private readonly activateCbs = new Set<(id: HighlightId) => void>();
   private readonly selectionCbs = new Set<(sel: TextSelection | null) => void>();
+  private readonly dragCbs = new Set<(dragging: boolean) => void>();
   private readonly aborter = new AbortController();
   /**
    * The last live selection. Section selections vanish without a
@@ -103,7 +104,18 @@ export class EpubViewerAdapter implements DocumentViewer {
       { signal },
     );
 
-    // foliate emits no selection event; listen per section document.
+    // A mouse drag that leaves the iframe delivers its release to the host
+    // document instead of the section's — watch both. Double reports and
+    // spurious releases are the consumer's no-op.
+    const onPointerUp = (): void => {
+      for (const cb of this.dragCbs) cb(false);
+    };
+    const hostDoc = this.view.ownerDocument;
+    hostDoc.addEventListener("pointerup", onPointerUp, { signal });
+    hostDoc.addEventListener("pointercancel", onPointerUp, { signal });
+
+    // foliate emits no selection event; listen per section document. The
+    // per-doc listeners need no removal: they die with the section document.
     this.view.addEventListener(
       "load",
       (event) => {
@@ -113,6 +125,13 @@ export class EpubViewerAdapter implements DocumentViewer {
           this.remembered = sel;
           for (const cb of this.selectionCbs) cb(sel);
         });
+        // Selection drags start inside the section iframe, whose pointer
+        // events never reach the host document.
+        doc.addEventListener("pointerdown", () => {
+          for (const cb of this.dragCbs) cb(true);
+        });
+        doc.addEventListener("pointerup", onPointerUp);
+        doc.addEventListener("pointercancel", onPointerUp);
       },
       { signal },
     );
@@ -200,6 +219,11 @@ export class EpubViewerAdapter implements DocumentViewer {
     return { dispose: () => this.selectionCbs.delete(cb) };
   }
 
+  onSelectionDrag(cb: (dragging: boolean) => void): Disposable {
+    this.dragCbs.add(cb);
+    return { dispose: () => this.dragCbs.delete(cb) };
+  }
+
   // ---- highlights ----------------------------------------------------------
 
   drawHighlight(h: Highlight): void {
@@ -271,5 +295,6 @@ export class EpubViewerAdapter implements DocumentViewer {
     this.aborter.abort();
     this.activateCbs.clear();
     this.selectionCbs.clear();
+    this.dragCbs.clear();
   }
 }
