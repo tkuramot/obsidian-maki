@@ -1,7 +1,7 @@
 # Maki
 
-Read and annotate PDF and EPUB documents inside [Obsidian](https://obsidian.md),
-with your markdown notes as the source of truth.
+Read and annotate PDF and EPUB documents in [Obsidian](https://obsidian.md),
+with the annotations stored as links in your notes.
 
 Maki is heavily inspired by
 [obsidian-pdf-plus](https://github.com/RyotaUshio/obsidian-pdf-plus): it takes the
